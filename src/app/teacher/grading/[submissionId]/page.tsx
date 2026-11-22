@@ -1,0 +1,292 @@
+"use client";
+
+import React, { useState } from "react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import {
+  ChevronRight,
+  Award,
+  CheckCircle2,
+  FileText,
+  FileCheck,
+  Clock,
+  User,
+  Send,
+  RotateCcw,
+  Eye,
+  Download,
+  AlertCircle,
+} from "lucide-react";
+import { AppHeader } from "@/components/layout/AppHeader";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { BottomNavigation } from "@/components/layout/BottomNavigation";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { PDFViewerModal } from "@/components/lessons/PDFViewerModal";
+import { MOCK_USERS, MOCK_SUBMISSIONS } from "@/lib/mock-data";
+import { formatBytes } from "@/lib/storage";
+
+export default function SubmissionGradingPage() {
+  const router = useRouter();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const teacher = MOCK_USERS.teacher1;
+  const params = useParams();
+  const submissionId = params?.submissionId as string;
+
+  const submission =
+    MOCK_SUBMISSIONS.find((s) => s.id === submissionId) || MOCK_SUBMISSIONS[0];
+
+  const [score, setScore] = useState<number | string>(
+    submission.score !== null && submission.score !== undefined ? submission.score : ""
+  );
+  const [feedback, setFeedback] = useState<string>(
+    submission.feedback_notes || ""
+  );
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // File Preview Modal
+  const [previewFileName, setPreviewFileName] = useState<string | null>(null);
+
+  const handlePublishGrade = (e: React.FormEvent) => {
+    e.preventDefault();
+    const numScore = parseFloat(String(score));
+
+    if (isNaN(numScore) || numScore < 0 || numScore > submission.max_score) {
+      alert(`يرجى إدخال درجة صالحة بين 0 و ${submission.max_score}.`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setTimeout(() => {
+      setIsSubmitting(false);
+      setSuccessMessage(
+        `تم رصد الدرجة (${numScore} / ${submission.max_score}) وإرسال الملاحظات للطالب بنجاح!`
+      );
+      setTimeout(() => {
+        router.push("/teacher/grading");
+      }, 1500);
+    }, 600);
+  };
+
+  const handleRequestRevision = () => {
+    if (!feedback.trim()) {
+      alert("يرجى كتابة الملاحظات والأسباب المطلوب من الطالب تعديلها في الحل.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setTimeout(() => {
+      setIsSubmitting(false);
+      setSuccessMessage("تم إرسال إشعار للطالب بطلب إعادة المحاولة مع التوجيهات المرفقة.");
+      setTimeout(() => {
+        router.push("/teacher/grading");
+      }, 1500);
+    }, 600);
+  };
+
+  return (
+    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
+      <AppHeader
+        user={teacher}
+        onOpenSidebar={() => setIsSidebarOpen(true)}
+      />
+
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        user={teacher}
+      />
+
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <Link
+            href="/teacher/grading"
+            className="p-2 -mr-2 rounded-xl text-muted hover:text-foreground transition-colors"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </Link>
+          <div className="text-center">
+            <h1 className="text-xl font-bold text-foreground">
+              تصحيح وتقييم الواجب
+            </h1>
+            <p className="text-xs text-brand-teal mt-0.5">
+              {submission.assignment_title}
+            </p>
+          </div>
+          <div className="w-6" />
+        </div>
+
+        {successMessage && (
+          <div className="p-4 rounded-2xl bg-brand-teal/15 border border-brand-teal/30 text-brand-teal text-sm flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* 1. Student & Submission Info Banner */}
+        <div className="p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-surface-secondary border border-border flex items-center justify-center font-bold text-base text-brand-teal shrink-0">
+                {submission.student_name.slice(0, 1)}
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-foreground">
+                  {submission.student_name}
+                </h2>
+                <span className="text-xs text-muted">
+                  رقم القيد: {submission.student_username} • الثالث الثانوي (علمي)
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <StatusBadge
+                type={submission.status === "graded" ? "completed" : "pending"}
+                label={submission.status === "graded" ? "تم التصحيح" : "تسليم جديد"}
+              />
+              <span className="text-xs text-muted bg-surface-secondary px-3 py-1 rounded-xl border border-border">
+                المحاولة {submission.attempt_number}
+              </span>
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center justify-between text-xs text-muted border-t border-border/80">
+            <span className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-muted" />
+              تاريخ التسليم: {submission.submitted_at}
+            </span>
+            <span className="font-semibold text-foreground">
+              الدرجة القصوى: {submission.max_score}
+            </span>
+          </div>
+        </div>
+
+        {/* 2. Student's Answer Text & Uploaded Files */}
+        <div className="p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
+          <h3 className="text-base font-bold text-foreground pb-2 border-b border-border/80">
+            إجابة الطالب وملفات الحل
+          </h3>
+
+          {/* Answer Text */}
+          <div>
+            <label className="block text-xs font-semibold text-muted mb-2">
+              نص الإجابة المرسل:
+            </label>
+            <div className="p-4 rounded-2xl bg-surface-secondary text-sm text-foreground leading-relaxed whitespace-pre-wrap border border-border">
+              {submission.answer_text}
+            </div>
+          </div>
+
+          {/* Attached Files */}
+          <div>
+            <label className="block text-xs font-semibold text-muted mb-2">
+              الملفات والصور المرفقة من الطالب:
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {submission.files.map((file, idx) => (
+                <div
+                  key={idx}
+                  className="p-3.5 rounded-2xl bg-surface-secondary border border-border flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <FileCheck className="w-5 h-5 text-brand-teal shrink-0" />
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-foreground truncate" dir="ltr">
+                        {file.name}
+                      </h4>
+                      <span className="text-[11px] text-muted">
+                        {formatBytes(file.size)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setPreviewFileName(file.name)}
+                    className="p-2 rounded-xl bg-brand-cyan/15 hover:bg-brand-cyan/25 text-brand-cyan transition-colors"
+                    title="معاينة الملف"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Grading & Feedback Section */}
+        <form onSubmit={handlePublishGrade} className="p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
+          <h3 className="text-base font-bold text-foreground pb-2 border-b border-border/80 flex items-center gap-2">
+            <Award className="w-5 h-5 text-brand-cyan" />
+            رصد الدرجة والملاحظات التقييمية
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
+                الدرجة المستحقة (من {submission.max_score})
+              </label>
+              <input
+                type="number"
+                step={0.5}
+                min={0}
+                max={submission.max_score}
+                required
+                placeholder={`أدخل درجة بين 0 و ${submission.max_score}`}
+                value={score}
+                onChange={(e) => setScore(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-black text-base focus:outline-none focus:border-brand-teal"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
+                ملاحظات وتوجيهات المعلم للطالب
+              </label>
+              <textarea
+                rows={3}
+                placeholder="اكتب تعليقك على الحل، نقاط القوة، وأي نقاط تحتاج لتحسين..."
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground text-sm focus:outline-none focus:border-brand-teal placeholder-muted/60"
+              />
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-border/80 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleRequestRevision}
+              disabled={isSubmitting}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-surface-secondary hover:bg-status-warning/15 hover:border-status-warning/40 border border-border text-foreground text-xs font-bold transition-all"
+            >
+              <RotateCcw className="w-4 h-4 text-status-warning" />
+              طلب إعادة الحل من الطالب
+            </button>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-teal to-brand-cyan text-background text-sm font-bold shadow-glow hover:opacity-95 transition-opacity disabled:opacity-50"
+            >
+              <Send className="w-4 h-4 rotate-180" />
+              {isSubmitting ? "جاري الاعتماد..." : "اعتماد ونشر النتيجة"}
+            </button>
+          </div>
+        </form>
+      </main>
+
+      <PDFViewerModal
+        isOpen={Boolean(previewFileName)}
+        onClose={() => setPreviewFileName(null)}
+        fileName={previewFileName || "student_solution.pdf"}
+        fileSizeBytes={1540000}
+      />
+
+      <BottomNavigation user={teacher} />
+    </div>
+  );
+}

@@ -20,6 +20,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { CourseCard } from "@/components/courses/CourseCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import {
   MOCK_USERS,
   MOCK_COURSES,
@@ -330,6 +331,7 @@ export default function StudentDashboardPage() {
             </div>
           </section>
         </div>
+        <DeveloperFooter />
       </main>
 
       <BottomNavigation user={student} />

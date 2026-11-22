@@ -20,6 +20,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { CourseCard } from "@/components/courses/CourseCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS, MOCK_COURSES, MOCK_SUBMISSIONS } from "@/lib/mock-data";
 
 export default function TeacherDashboardPage() {
@@ -277,6 +278,7 @@ export default function TeacherDashboardPage() {
             </div>
           </section>
         </div>
+        <DeveloperFooter />
       </main>
 
       <BottomNavigation user={teacher} />

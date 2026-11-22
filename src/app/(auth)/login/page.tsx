@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { setSessionRole } from "@/lib/auth-actions";
 import { UserRole } from "@/types/database.types";
+import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -205,6 +206,7 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+          <DeveloperFooter />
         </div>
       </div>
     </div>

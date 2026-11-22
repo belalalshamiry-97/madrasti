@@ -21,6 +21,7 @@ import {
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
+import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS, MOCK_SCHOOL_SETTINGS } from "@/lib/mock-data";
 
 export default function AdminDashboardPage() {
@@ -304,6 +305,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </section>
+        <DeveloperFooter />
       </main>
 
       <BottomNavigation user={admin} />

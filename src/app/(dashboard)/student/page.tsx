@@ -28,10 +28,16 @@ import {
   MOCK_ASSIGNMENTS,
   MOCK_ANNOUNCEMENTS,
 } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
 
 export default function StudentDashboardPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const student = MOCK_USERS.student1;
+  const [student, setStudent] = useState(MOCK_USERS.student1);
+
+  React.useEffect(() => {
+    const active = getActiveUser("STUDENT");
+    if (active.role === "STUDENT") setStudent(active);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">

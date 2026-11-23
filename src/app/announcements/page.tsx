@@ -20,6 +20,7 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_ANNOUNCEMENTS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
 import { Announcement } from "@/types/database.types";
 import { cn } from "@/lib/utils";
 
@@ -33,11 +34,8 @@ export default function AnnouncementsPage() {
   const [currentUser, setCurrentUser] = useState(MOCK_USERS.student1);
 
   React.useEffect(() => {
-    const match = document.cookie.match(new RegExp("(^| )madrasti_session_role=([^;]+)"));
-    const role = match ? match[2] : "STUDENT";
-    if (role === "TEACHER") setCurrentUser(MOCK_USERS.teacher1);
-    else if (role === "ADMIN") setCurrentUser(MOCK_USERS.admin);
-    else setCurrentUser(MOCK_USERS.student1);
+    const active = getActiveUser();
+    setCurrentUser(active);
   }, []);
 
   const [announcements, setAnnouncements] = useState<ExtendedAnnouncement[]>([

@@ -25,12 +25,14 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS, MOCK_SCHOOL_SETTINGS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentRole, setCurrentRole] = useState<string>("ADMIN");
   const [isAuthorized, setIsAuthorized] = useState<boolean>(true);
+  const [admin, setAdmin] = useState(MOCK_USERS.admin);
 
   useEffect(() => {
     // Check session role from cookies
@@ -39,6 +41,9 @@ export default function AdminDashboardPage() {
     setCurrentRole(role);
     if (role !== "ADMIN") {
       setIsAuthorized(false);
+    } else {
+      const active = getActiveUser("ADMIN");
+      if (active.role === "ADMIN") setAdmin(active);
     }
   }, []);
 
@@ -63,8 +68,6 @@ export default function AdminDashboardPage() {
       </div>
     );
   }
-
-  const admin = MOCK_USERS.admin;
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">

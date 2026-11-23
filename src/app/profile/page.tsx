@@ -20,17 +20,17 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
 
 export default function ProfilePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(MOCK_USERS.student1);
 
   React.useEffect(() => {
-    const match = document.cookie.match(new RegExp("(^| )madrasti_session_role=([^;]+)"));
-    const role = match ? match[2] : "STUDENT";
-    if (role === "TEACHER") setCurrentUser(MOCK_USERS.teacher1);
-    else if (role === "ADMIN") setCurrentUser(MOCK_USERS.admin);
-    else setCurrentUser(MOCK_USERS.student1);
+    const active = getActiveUser();
+    setCurrentUser(active);
+    setPhone(active.phone || "770000000");
+    setEmail(`${active.username}@madrasti.school`);
   }, []);
 
   const [phone, setPhone] = useState(currentUser.phone || "777888999");

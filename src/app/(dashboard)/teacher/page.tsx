@@ -22,10 +22,16 @@ import { CourseCard } from "@/components/courses/CourseCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS, MOCK_COURSES, MOCK_SUBMISSIONS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
 
 export default function TeacherDashboardPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const teacher = MOCK_USERS.teacher1;
+  const [teacher, setTeacher] = useState(MOCK_USERS.teacher1);
+
+  React.useEffect(() => {
+    const active = getActiveUser("TEACHER");
+    if (active.role === "TEACHER") setTeacher(active);
+  }, []);
 
   // Filter courses taught by this teacher
   const teacherCourses = MOCK_COURSES.filter(

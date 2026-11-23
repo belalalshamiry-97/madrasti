@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -16,8 +16,11 @@ import {
   X,
   CheckSquare,
   Square,
-  BadgeCheck,
+  Lock,
+  Eye,
+  EyeOff,
   Edit2,
+  Key,
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -25,6 +28,7 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
 import { UserRole } from "@/types/database.types";
+import { AppUser, getStoredUsers, saveStoredUser } from "@/lib/user-store";
 import { cn } from "@/lib/utils";
 
 // Available granular permissions in the school LMS
@@ -38,84 +42,29 @@ const SYSTEM_PERMISSIONS = [
   { id: "view_reports", label: "عرض التقارير والمؤشرات" },
 ] as const;
 
-interface ManagedUser {
-  id: string;
-  full_name: string;
-  username: string;
-  role: UserRole;
-  phone: string;
-  permissions: string[]; // List of permission IDs
-  status: "active" | "suspended";
-}
-
 export default function AdminUsersPermissionsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const admin = MOCK_USERS.admin;
 
-  const [usersList, setUsersList] = useState<ManagedUser[]>([
-    {
-      id: "u-1",
-      full_name: "د. عبد الرحمن باحميد",
-      username: "admin",
-      role: "ADMIN",
-      phone: "777111222",
-      permissions: [
-        "manage_classes",
-        "view_attendance",
-        "manage_grades",
-        "broadcast_announcements",
-        "manage_users",
-        "assign_teachers",
-        "view_reports",
-      ],
-      status: "active",
-    },
-    {
-      id: "u-2",
-      full_name: "م. بلال الشميري",
-      username: "teacher1",
-      role: "TEACHER",
-      phone: "783085075",
-      permissions: ["view_attendance", "manage_grades", "broadcast_announcements", "view_reports"],
-      status: "active",
-    },
-    {
-      id: "u-3",
-      full_name: "أ. فاطمة العولقي",
-      username: "teacher2",
-      role: "TEACHER",
-      phone: "777555666",
-      permissions: ["view_attendance", "manage_grades", "broadcast_announcements"],
-      status: "active",
-    },
-    {
-      id: "u-4",
-      full_name: "عمر أحمد بافضل",
-      username: "student1",
-      role: "STUDENT",
-      phone: "777888999",
-      permissions: [],
-      status: "active",
-    },
-    {
-      id: "u-5",
-      full_name: "سارة خالد الكثيري",
-      username: "student2",
-      role: "STUDENT",
-      phone: "777999000",
-      permissions: [],
-      status: "active",
-    },
-  ]);
+  const [usersList, setUsersList] = useState<AppUser[]>([]);
+
+  useEffect(() => {
+    // Load from persistent user store
+    setUsersList(getStoredUsers());
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | UserRole>("ALL");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingPermissionsUser, setEditingPermissionsUser] = useState<ManagedUser | null>(null);
+  const [editingPermissionsUser, setEditingPermissionsUser] = useState<AppUser | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<AppUser | null>(null);
+  const [newPasswordValue, setNewPasswordValue] = useState("");
 
-  // New User Form State
+  // New User Form State with Password
   const [newFullName, setNewFullName] = useState("");
   const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [newRole, setNewRole] = useState<UserRole>("TEACHER");
   const [newPhone, setNewPhone] = useState("");
   const [newSelectedPermissions, setNewSelectedPermissions] = useState<string[]>([
@@ -151,49 +100,58 @@ export default function AdminUsersPermissionsPage() {
 
   const handleSaveEditedPermissions = () => {
     if (!editingPermissionsUser) return;
-    setUsersList((prev) =>
-      prev.map((u) =>
-        u.id === editingPermissionsUser.id
-          ? { ...u, permissions: editingPermissionsUser.permissions }
-          : u
-      )
-    );
-    showToast(`تم تحديث صلاحيات "${editingPermissionsUser.full_name}" بنجاح!`);
+    saveStoredUser(editingPermissionsUser);
+    setUsersList(getStoredUsers());
+    showToast(`تم تحديث صلاحيات "${editingPermissionsUser.full_name}" وحفظها في قاعدة البيانات بنجاح!`);
     setEditingPermissionsUser(null);
+  };
+
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordUser || !newPasswordValue.trim()) return;
+
+    const updatedUser = { ...resetPasswordUser, password: newPasswordValue.trim() };
+    saveStoredUser(updatedUser);
+    setUsersList(getStoredUsers());
+    showToast(`تم تغيير كلمة المرور لـ "${resetPasswordUser.full_name}" بنجاح!`);
+    setResetPasswordUser(null);
+    setNewPasswordValue("");
   };
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFullName.trim() || !newUsername.trim()) return;
 
-    const newUser: ManagedUser = {
+    const cleanUsername = newUsername.trim().toLowerCase();
+
+    // Check if username already exists
+    if (usersList.some((u) => u.username.toLowerCase() === cleanUsername)) {
+      showToast("اسم المستخدم هذا مسجل مسبقاً، يرجى اختيار اسم مستخدم آخر.");
+      return;
+    }
+
+    const newUser: AppUser = {
       id: `u-${Date.now()}`,
       full_name: newFullName.trim(),
-      username: newUsername.trim(),
+      username: cleanUsername,
+      password: newPassword.trim() || "123", // Set specified password
       role: newRole,
-      phone: newPhone.trim() || "—",
+      phone: newPhone.trim() || "770000000",
       permissions: newRole === "ADMIN" ? SYSTEM_PERMISSIONS.map((p) => p.id) : newSelectedPermissions,
       status: "active",
+      created_at: new Date().toISOString(),
     };
 
-    setUsersList((prev) => [newUser, ...prev]);
+    saveStoredUser(newUser);
+    setUsersList(getStoredUsers());
+
     setIsAddModalOpen(false);
     setNewFullName("");
     setNewUsername("");
+    setNewPassword("");
     setNewPhone("");
     setNewSelectedPermissions(["view_attendance", "manage_grades"]);
-    showToast(`تم إنشاء المستخدم ومنحه ${newUser.permissions.length} صلاحيات بنجاح!`);
-  };
-
-  const getRoleTitle = (role: UserRole) => {
-    switch (role) {
-      case "ADMIN":
-        return "مدير المدرسة (صلاحيات كاملة)";
-      case "TEACHER":
-        return "معلم / كادر تعليمي";
-      case "STUDENT":
-        return "طالب";
-    }
+    showToast(`تم حفظ المعلم/المستخدم "${newUser.full_name}" بكلمة مروره ودوره (${newUser.role}) بنجاح!`);
   };
 
   const filteredUsers = usersList.filter((u) => {
@@ -222,10 +180,10 @@ export default function AdminUsersPermissionsPage() {
             <div>
               <h1 className="text-xl font-black text-foreground flex items-center gap-2">
                 <Shield className="w-6 h-6 text-status-warning" />
-                إدارة المستخدمين وتحديد الصلاحيات المتعددة
+                إدارة المستخدمين، كلمات المرور، والصلاحيات
               </h1>
               <p className="text-xs text-muted">
-                إمكانية تحديد أكثر من صلاحية لكل مستخدم وتعيين الأدوار والمهام الإدارية
+                إضافة المعلمين والطلاب وتعيين كلمات المرور المباشرة وتحديد الصلاحيات المتعددة
               </p>
             </div>
           </div>
@@ -235,7 +193,7 @@ export default function AdminUsersPermissionsPage() {
             className="px-4 py-2 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center justify-center gap-1.5 hover:brightness-110 shadow-glow transition-all"
           >
             <UserPlus className="w-4 h-4" />
-            إضافة مستخدم وتحديد صلاحياته
+            إضافة مستخدم وتعيين كلمة المرور
           </button>
         </div>
 
@@ -315,9 +273,9 @@ export default function AdminUsersPermissionsPage() {
         <div className="p-4 sm:p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
           <div className="hidden sm:grid sm:grid-cols-12 text-xs font-bold text-muted pb-3 border-b border-border">
             <span className="col-span-4">المستخدم والحساب</span>
-            <span className="col-span-2 text-center">الدور الأساسي</span>
-            <span className="col-span-4 text-center">الصلاحيات المحددة</span>
-            <span className="col-span-2 text-left">تعديل الصلاحيات</span>
+            <span className="col-span-2 text-center">الدور وكلمة المرور</span>
+            <span className="col-span-3 text-center">الصلاحيات المحددة</span>
+            <span className="col-span-3 text-left">إجراءات الإدارة</span>
           </div>
 
           <div className="space-y-3">
@@ -359,8 +317,8 @@ export default function AdminUsersPermissionsPage() {
                   </div>
                 </div>
 
-                {/* Role Pill */}
-                <div className="col-span-2 text-center">
+                {/* Role Pill & Password indicator */}
+                <div className="col-span-2 text-center space-y-1">
                   <span
                     className={cn(
                       "px-2.5 py-1 rounded-full text-xs font-bold inline-block",
@@ -373,18 +331,21 @@ export default function AdminUsersPermissionsPage() {
                   >
                     {userItem.role}
                   </span>
+                  <span className="block text-[10px] text-muted font-mono" dir="ltr">
+                    كلمة المرور: ••••
+                  </span>
                 </div>
 
                 {/* Multiple Permissions Badges */}
-                <div className="col-span-4 flex flex-wrap gap-1 justify-center sm:justify-start">
+                <div className="col-span-3 flex flex-wrap gap-1 justify-center sm:justify-start">
                   {userItem.role === "STUDENT" ? (
-                    <span className="text-[11px] text-muted">صلاحيات منصة الطالب القياسية</span>
+                    <span className="text-[11px] text-muted">صلاحيات التعلم الأساسية</span>
                   ) : userItem.role === "ADMIN" ? (
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-status-warning/15 text-status-warning border border-status-warning/30">
-                      كامل صلاحيات المنصة (7 صلاحيات)
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-status-warning/15 text-status-warning border border-status-warning/30">
+                      كامل الصلاحيات (7)
                     </span>
                   ) : (
-                    userItem.permissions.map((pId) => {
+                    (userItem.permissions || []).map((pId) => {
                       const pObj = SYSTEM_PERMISSIONS.find((p) => p.id === pId);
                       return (
                         <span
@@ -398,15 +359,24 @@ export default function AdminUsersPermissionsPage() {
                   )}
                 </div>
 
-                {/* Edit Button */}
-                <div className="col-span-2 text-left">
+                {/* Action Buttons */}
+                <div className="col-span-3 flex items-center justify-end gap-1.5">
+                  <button
+                    onClick={() => setResetPasswordUser(userItem)}
+                    className="px-2.5 py-1.5 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-muted hover:text-foreground text-xs font-bold flex items-center gap-1 transition-colors"
+                    title="تغيير كلمة المرور"
+                  >
+                    <Key className="w-3.5 h-3.5 text-status-warning" />
+                    <span>تغيير المرور</span>
+                  </button>
+
                   {userItem.role !== "STUDENT" && (
                     <button
                       onClick={() => setEditingPermissionsUser(userItem)}
-                      className="px-3 py-1.5 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-foreground text-xs font-bold flex items-center gap-1.5 transition-colors"
+                      className="px-2.5 py-1.5 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-foreground text-xs font-bold flex items-center gap-1 transition-colors"
                     >
                       <Edit2 className="w-3.5 h-3.5 text-brand-cyan" />
-                      <span>تحديد الصلاحيات</span>
+                      <span>الصلاحيات</span>
                     </button>
                   )}
                 </div>
@@ -417,6 +387,68 @@ export default function AdminUsersPermissionsPage() {
 
         <DeveloperFooter />
       </main>
+
+      {/* Reset Password Modal */}
+      {resetPasswordUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-surface p-6 rounded-3xl border border-border shadow-2xl max-w-sm w-full space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Key className="w-5 h-5 text-status-warning" />
+                <h3 className="text-base font-bold text-foreground">
+                  تغيير كلمة المرور
+                </h3>
+              </div>
+              <button
+                onClick={() => setResetPasswordUser(null)}
+                className="p-1 rounded-xl text-muted hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPassword} className="space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-surface-secondary border border-border">
+                <span className="text-muted block">المستخدم:</span>
+                <span className="font-bold text-foreground text-sm">
+                  {resetPasswordUser.full_name} (@{resetPasswordUser.username})
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-foreground mb-1">
+                  كلمة المرور الجديدة
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="أدخل كلمة المرور الجديدة..."
+                  value={newPasswordValue}
+                  onChange={(e) => setNewPasswordValue(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-mono focus:outline-none focus:border-brand-cyan"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setResetPasswordUser(null)}
+                  className="px-4 py-2 rounded-xl bg-surface-secondary text-muted hover:text-foreground"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-brand-cyan text-background font-bold shadow-glow"
+                >
+                  تحديث كلمة المرور
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit Permissions Modal */}
       {editingPermissionsUser && (
@@ -451,7 +483,7 @@ export default function AdminUsersPermissionsPage() {
                 </label>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {SYSTEM_PERMISSIONS.map((perm) => {
-                    const isChecked = editingPermissionsUser.permissions.includes(perm.id);
+                    const isChecked = (editingPermissionsUser.permissions || []).includes(perm.id);
                     return (
                       <div
                         key={perm.id}
@@ -496,14 +528,14 @@ export default function AdminUsersPermissionsPage() {
         </div>
       )}
 
-      {/* Add User Modal */}
+      {/* Add User Modal with Mandatory Password */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-surface p-6 rounded-3xl border border-border shadow-2xl max-w-md w-full space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-border">
               <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-brand-cyan" />
-                إضافة مستخدم جديد وتحديد صلاحياته
+                إضافة مستخدم جديد وتعيين كلمة المرور
               </h3>
               <button
                 onClick={() => setIsAddModalOpen(false)}
@@ -531,7 +563,7 @@ export default function AdminUsersPermissionsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-semibold text-foreground mb-1">
-                    اسم المستخدم (Login)
+                    اسم المستخدم (Login Username)
                   </label>
                   <input
                     type="text"
@@ -559,18 +591,46 @@ export default function AdminUsersPermissionsPage() {
                 </div>
               </div>
 
+              {/* Password Field - Clear & Explicit */}
               <div>
                 <label className="block font-semibold text-foreground mb-1">
-                  نوع الحساب الأساسي
+                  تعيين كلمة المرور الأولية للحساب
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    placeholder="اكتب كلمة مرور قوية للمستخدم..."
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pr-3 pl-10 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-mono focus:outline-none focus:border-brand-cyan"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 left-0 pl-3 flex items-center text-muted hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <span className="text-[10px] text-muted block mt-1">
+                  * سيستخدم المستخدم كلمة المرور هذه لتسجيل الدخول من شاشة تسجيل الدخول.
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-foreground mb-1">
+                  نوع الحساب الأساسي والصلاحية
                 </label>
                 <select
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value as UserRole)}
                   className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                 >
-                  <option value="TEACHER">معلم (كادر تعليمي)</option>
-                  <option value="ADMIN">مدير المدرسة (إدارة عامة)</option>
-                  <option value="STUDENT">طالب (بوابة التعلم)</option>
+                  <option value="TEACHER">معلم (كادر تعليمي وتدريس)</option>
+                  <option value="ADMIN">مدير المدرسة (إدارة عامة وصلاحيات كاملة)</option>
+                  <option value="STUDENT">طالب (بوابة التعلم والواجبات)</option>
                 </select>
               </div>
 
@@ -618,7 +678,7 @@ export default function AdminUsersPermissionsPage() {
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-brand-cyan text-background font-bold shadow-glow"
                 >
-                  إنشاء الحساب والصلاحيات
+                  حفظ المستخدم وتعيين كلمة المرور
                 </button>
               </div>
             </form>

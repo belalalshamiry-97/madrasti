@@ -11,9 +11,12 @@ import {
   ArrowRight,
   BookOpen,
   UserCheck,
+  Shield,
+  Info,
 } from "lucide-react";
 import { setSessionRole } from "@/lib/auth-actions";
 import { UserRole } from "@/types/database.types";
+import { authenticateUser, getStoredUsers, setActiveUser } from "@/lib/user-store";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 
 export default function LoginPage() {
@@ -30,27 +33,29 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const cleanUser = username.trim().toLowerCase();
+      const cleanUser = username.trim();
+      const authResult = authenticateUser(cleanUser, password);
 
-      // Check role mapping
-      let role: UserRole = "STUDENT";
-      if (cleanUser === "admin") {
-        // Enforce password for admin
-        if (password.length < 4) {
-          setError("يرجى إدخال كلمة مرور الإدارة الصحيحة.");
-          setLoading(false);
-          return;
-        }
-        role = "ADMIN";
-      } else if (cleanUser.includes("teacher")) {
-        role = "TEACHER";
+      if (!authResult.success || !authResult.user) {
+        setError(authResult.error || "بيانات الدخول غير صحيحة.");
+        setLoading(false);
+        return;
       }
 
-      await setSessionRole(role);
+      const user = authResult.user;
+      setActiveUser(user);
 
-      if (role === "ADMIN") router.push("/admin");
-      else if (role === "TEACHER") router.push("/teacher");
-      else router.push("/student");
+      // Set cookies for role and user
+      await setSessionRole(user.role, user.username, user.full_name);
+
+      // Route strictly based on user's actual database role
+      if (user.role === "ADMIN") {
+        router.push("/admin");
+      } else if (user.role === "TEACHER") {
+        router.push("/teacher");
+      } else {
+        router.push("/student");
+      }
 
       router.refresh();
     } catch {
@@ -59,10 +64,20 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickDemo = async (role: "STUDENT" | "TEACHER") => {
+  const handleQuickDemo = async (role: "ADMIN" | "TEACHER" | "STUDENT", demoUsername: string) => {
     setLoading(true);
-    await setSessionRole(role);
-    if (role === "TEACHER") router.push("/teacher");
+    const users = getStoredUsers();
+    const targetUser = users.find((u) => u.username.toLowerCase() === demoUsername.toLowerCase());
+
+    if (targetUser) {
+      setActiveUser(targetUser);
+      await setSessionRole(targetUser.role, targetUser.username, targetUser.full_name);
+    } else {
+      await setSessionRole(role);
+    }
+
+    if (role === "ADMIN") router.push("/admin");
+    else if (role === "TEACHER") router.push("/teacher");
     else router.push("/student");
     router.refresh();
   };
@@ -91,7 +106,7 @@ export default function LoginPage() {
         <div className="bg-surface py-8 px-6 shadow-card rounded-3xl border border-border sm:px-10">
           <form className="space-y-5" onSubmit={handleLogin}>
             {error && (
-              <div className="p-3 rounded-xl bg-status-danger/10 border border-status-danger/30 text-status-danger text-sm">
+              <div className="p-3 rounded-xl bg-status-danger/10 border border-status-danger/30 text-status-danger text-sm font-semibold">
                 {error}
               </div>
             )}
@@ -101,7 +116,7 @@ export default function LoginPage() {
                 htmlFor="username"
                 className="block text-sm font-medium text-foreground mb-1.5"
               >
-                اسم المستخدم أو رقم الطالب
+                اسم المستخدم (Username)
               </label>
               <div className="relative rounded-xl">
                 <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-muted">
@@ -112,7 +127,7 @@ export default function LoginPage() {
                   name="username"
                   type="text"
                   required
-                  placeholder="مثال: student1 أو teacher1"
+                  placeholder="مثال: admin أو teacher1 أو حسابك المسجل"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="block w-full pr-11 pl-4 py-3 bg-surface-secondary border border-border rounded-xl text-foreground placeholder-muted/60 focus:outline-none focus:border-brand-cyan focus:ring-1 focus:ring-brand-cyan text-sm transition-all"
@@ -136,7 +151,7 @@ export default function LoginPage() {
                   name="password"
                   type={showPassword ? "text" : "password"}
                   required
-                  placeholder="••••••••"
+                  placeholder="كلمة المرور الخاصة بك..."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="block w-full pr-11 pl-11 py-3 bg-surface-secondary border border-border rounded-xl text-foreground placeholder-muted/60 focus:outline-none focus:border-brand-cyan focus:ring-1 focus:ring-brand-cyan text-sm transition-all"
@@ -161,7 +176,7 @@ export default function LoginPage() {
                 href="#help"
                 onClick={(e) => {
                   e.preventDefault();
-                  alert("يرجى مراجعة إدارة المدرسة لإعادة تعيين كلمة المرور الخاصة بك.");
+                  alert("يرجى مراجعة إدارة المدرسة للحصول على بيانات الدخول أو إعادة تعيين كلمة المرور.");
                 }}
                 className="text-brand-cyan hover:underline font-medium"
               >
@@ -174,38 +189,54 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full flex justify-center items-center gap-2 py-3.5 px-4 rounded-xl text-sm font-bold text-background bg-gradient-to-r from-brand-cyan to-brand-blue hover:opacity-95 shadow-glow transition-all disabled:opacity-50"
             >
-              {loading ? "جاري الدخول..." : "تسجيل الدخول"}
+              {loading ? "جاري التحقق والدخول..." : "تسجيل الدخول"}
               <ArrowRight className="w-4 h-4 rotate-180" />
             </button>
           </form>
 
-          {/* Quick Access Bar for Students and Teachers only */}
-          <div className="mt-8 pt-6 border-t border-border/80">
-            <p className="text-xs text-center font-medium text-muted mb-3">
-              الدخول السريع بحساب تجريبي:
-            </p>
-            <div className="grid grid-cols-2 gap-3">
+          {/* Quick Demo Access Bar */}
+          <div className="mt-8 pt-6 border-t border-border/80 space-y-3">
+            <div className="p-3 rounded-2xl bg-surface-secondary/70 border border-border text-[11px] text-muted space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-foreground">
+                <Info className="w-3.5 h-3.5 text-brand-cyan" />
+                <span>بيانات الحسابات التجريبية الافتراضية (كلمة المرور: 123):</span>
+              </div>
+              <p>• مدير المدرسة: <strong className="text-brand-cyan font-mono">admin</strong></p>
+              <p>• المعلم: <strong className="text-brand-teal font-mono">teacher1</strong></p>
+              <p>• الطالب: <strong className="text-brand-cyan font-mono">student1</strong></p>
+              <p className="text-[10px] text-brand-cyan">*(أي معلم أو طالب يضيفه المدير يُحفظ فورياً بكلمة مروره الخاصة)*</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickDemo("STUDENT")}
-                className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-surface-secondary hover:bg-brand-cyan/15 hover:border-brand-cyan/40 border border-border text-foreground transition-all"
+                onClick={() => handleQuickDemo("ADMIN", "admin")}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-secondary hover:bg-status-warning/15 hover:border-status-warning/40 border border-border text-foreground transition-all"
               >
-                <UserCheck className="w-5 h-5 text-brand-cyan mb-1" />
-                <span className="text-xs font-semibold">حساب طالب</span>
-                <span className="text-[10px] text-muted">عمر بافضل</span>
+                <Shield className="w-4 h-4 text-status-warning mb-1" />
+                <span className="text-[11px] font-bold">دخول كمدير</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleQuickDemo("TEACHER")}
-                className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-surface-secondary hover:bg-brand-teal/15 hover:border-brand-teal/40 border border-border text-foreground transition-all"
+                onClick={() => handleQuickDemo("TEACHER", "teacher1")}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-secondary hover:bg-brand-teal/15 hover:border-brand-teal/40 border border-border text-foreground transition-all"
               >
-                <BookOpen className="w-5 h-5 text-brand-teal mb-1" />
-                <span className="text-xs font-semibold">حساب معلم</span>
-                <span className="text-[10px] text-muted">م. بلال الشميري</span>
+                <BookOpen className="w-4 h-4 text-brand-teal mb-1" />
+                <span className="text-[11px] font-bold">دخول كمعلم</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickDemo("STUDENT", "student1")}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-secondary hover:bg-brand-cyan/15 hover:border-brand-cyan/40 border border-border text-foreground transition-all"
+              >
+                <UserCheck className="w-4 h-4 text-brand-cyan mb-1" />
+                <span className="text-[11px] font-bold">دخول كطالب</span>
               </button>
             </div>
           </div>
+
           <DeveloperFooter />
         </div>
       </div>

@@ -13,6 +13,8 @@ export interface AppUser {
   permissions: string[];
   status: "active" | "suspended";
   created_at?: string;
+  grade?: string;
+  section?: string;
 }
 
 const STORAGE_KEY = "madrasti_users_directory";
@@ -67,6 +69,8 @@ export const INITIAL_APP_USERS: AppUser[] = [
     password: "123",
     role: "STUDENT",
     phone: "777888999",
+    grade: "الثالث الثانوي",
+    section: "الشعبة (أ)",
     permissions: [],
     status: "active",
     created_at: "2026-09-01T00:00:00Z",
@@ -78,6 +82,8 @@ export const INITIAL_APP_USERS: AppUser[] = [
     password: "123",
     role: "STUDENT",
     phone: "777999000",
+    grade: "الثالث الثانوي",
+    section: "الشعبة (أ)",
     permissions: [],
     status: "active",
     created_at: "2026-09-01T00:00:00Z",
@@ -176,6 +182,8 @@ export function getActiveUser(fallbackRole?: UserRole): Profile {
             full_name: u.full_name,
             username: u.username,
             phone: u.phone,
+            grade: u.grade || "الثالث الثانوي",
+            section: u.section || "الشعبة (أ)",
             is_active: u.status === "active",
             created_at: u.created_at || "2026-09-01T00:00:00Z",
             updated_at: new Date().toISOString(),
@@ -189,7 +197,23 @@ export function getActiveUser(fallbackRole?: UserRole): Profile {
 
   if (fallbackRole === "ADMIN") return MOCK_USERS.admin;
   if (fallbackRole === "TEACHER") return MOCK_USERS.teacher1;
-  return MOCK_USERS.student1;
+  return {
+    ...MOCK_USERS.student1,
+    grade: "الثالث الثانوي",
+    section: "الشعبة (أ)",
+  };
+}
+
+/**
+ * Gets details of a user by username or ID
+ */
+export function getUserDetails(usernameOrId: string): AppUser | undefined {
+  const users = getStoredUsers();
+  return users.find(
+    (u) =>
+      u.id === usernameOrId ||
+      u.username.toLowerCase() === usernameOrId.toLowerCase()
+  );
 }
 
 /**

@@ -206,40 +206,30 @@ export default function LoginPage() {
             <div className="p-3 rounded-2xl bg-surface-secondary/70 border border-border text-[11px] text-muted space-y-1">
               <div className="flex items-center gap-1.5 font-bold text-foreground">
                 <Info className="w-3.5 h-3.5 text-brand-cyan" />
-                <span>بيانات الحسابات التجريبية الافتراضية (كلمة المرور: 123):</span>
+                <span>حسابات تجريبية سريعة للفحص:</span>
               </div>
-              <p>• مدير المدرسة: <strong className="text-brand-cyan font-mono">admin</strong></p>
-              <p>• المعلم: <strong className="text-brand-teal font-mono">teacher1</strong></p>
-              <p>• الطالب: <strong className="text-brand-cyan font-mono">student1</strong></p>
-              <p className="text-[10px] text-brand-cyan">*(أي معلم أو طالب يضيفه المدير يُحفظ فورياً بكلمة مروره الخاصة)*</p>
+              <p>• المعلم: <strong className="text-brand-teal font-mono">teacher1</strong> (كلمة المرور: 123)</p>
+              <p>• الطالب: <strong className="text-brand-cyan font-mono">student1</strong> (كلمة المرور: 123)</p>
+              <p className="text-[10px] text-brand-cyan font-semibold">🔒 حساب المدير محمي ولا يمكن الدخول عليه إلا بكتابة بياناته يدوياً في النموذج أعلاه.</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo("ADMIN", "admin")}
-                className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-secondary hover:bg-status-warning/15 hover:border-status-warning/40 border border-border text-foreground transition-all"
-              >
-                <Shield className="w-4 h-4 text-status-warning mb-1" />
-                <span className="text-[11px] font-bold">دخول كمدير</span>
-              </button>
-
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => handleQuickDemo("TEACHER", "teacher1")}
-                className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-secondary hover:bg-brand-teal/15 hover:border-brand-teal/40 border border-border text-foreground transition-all"
+                className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-surface-secondary hover:bg-brand-teal/15 hover:border-brand-teal/40 border border-border text-foreground transition-all"
               >
                 <BookOpen className="w-4 h-4 text-brand-teal mb-1" />
-                <span className="text-[11px] font-bold">دخول كمعلم</span>
+                <span className="text-[11px] font-bold">دخول سريع كمعلم</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleQuickDemo("STUDENT", "student1")}
-                className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-secondary hover:bg-brand-cyan/15 hover:border-brand-cyan/40 border border-border text-foreground transition-all"
+                className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-surface-secondary hover:bg-brand-cyan/15 hover:border-brand-cyan/40 border border-border text-foreground transition-all"
               >
                 <UserCheck className="w-4 h-4 text-brand-cyan mb-1" />
-                <span className="text-[11px] font-bold">دخول كطالب</span>
+                <span className="text-[11px] font-bold">دخول سريع كطالب</span>
               </button>
             </div>
           </div>

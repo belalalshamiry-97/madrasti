@@ -1,4 +1,4 @@
-﻿export type UserRole = "ADMIN" | "TEACHER" | "STUDENT";
+export type UserRole = "ADMIN" | "TEACHER" | "STUDENT";
 
 export interface SchoolSettings {
   id: string;
@@ -23,6 +23,8 @@ export interface Profile {
   username: string;
   phone?: string | null;
   avatar_url?: string | null;
+  grade?: string;
+  section?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;

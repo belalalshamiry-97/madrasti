@@ -22,25 +22,25 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { PDFViewerModal } from "@/components/lessons/PDFViewerModal";
-import { MOCK_USERS, MOCK_SUBMISSIONS } from "@/lib/mock-data";
+import { MOCK_USERS } from "@/lib/mock-data";
 import { formatBytes } from "@/lib/storage";
+import { getActiveUser } from "@/lib/user-store";
+import {
+  getStoredSubmissions,
+  gradeSubmission,
+  AssignmentSubmission,
+} from "@/lib/submission-store";
 
 export default function SubmissionGradingPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const teacher = MOCK_USERS.teacher1;
+  const [teacher, setTeacher] = useState(MOCK_USERS.teacher1);
   const params = useParams();
   const submissionId = params?.submissionId as string;
 
-  const submission =
-    MOCK_SUBMISSIONS.find((s) => s.id === submissionId) || MOCK_SUBMISSIONS[0];
-
-  const [score, setScore] = useState<number | string>(
-    submission.score !== null && submission.score !== undefined ? submission.score : ""
-  );
-  const [feedback, setFeedback] = useState<string>(
-    submission.feedback_notes || ""
-  );
+  const [submission, setSubmission] = useState<AssignmentSubmission | null>(null);
+  const [score, setScore] = useState<number | string>("");
+  const [feedback, setFeedback] = useState<string>("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -48,8 +48,24 @@ export default function SubmissionGradingPage() {
   // File Preview Modal
   const [previewFileName, setPreviewFileName] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    const active = getActiveUser("TEACHER");
+    setTeacher(active);
+
+    const allSubs = getStoredSubmissions();
+    const found = allSubs.find((s) => s.id === submissionId) || allSubs[0];
+    if (found) {
+      setSubmission(found);
+      setScore(
+        found.score !== null && found.score !== undefined ? found.score : ""
+      );
+      setFeedback(found.feedback_notes || "");
+    }
+  }, [submissionId]);
+
   const handlePublishGrade = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!submission) return;
     const numScore = parseFloat(String(score));
 
     if (isNaN(numScore) || numScore < 0 || numScore > submission.max_score) {
@@ -58,15 +74,24 @@ export default function SubmissionGradingPage() {
     }
 
     setIsSubmitting(true);
+    // Real persistent grading saved to store
+    const success = gradeSubmission(
+      submission.id,
+      numScore,
+      feedback,
+      teacher.full_name
+    );
+
+    if (success) {
+      setSuccessMessage(
+        `تم رصد الدرجة (${numScore} / ${submission.max_score}) وحفظها رسمياً في سجل درجات الطالب "${submission.student_name}" بنجاح!`
+      );
+    }
+
     setTimeout(() => {
       setIsSubmitting(false);
-      setSuccessMessage(
-        `تم رصد الدرجة (${numScore} / ${submission.max_score}) وإرسال الملاحظات للطالب بنجاح!`
-      );
-      setTimeout(() => {
-        router.push("/teacher/grading");
-      }, 1500);
-    }, 600);
+      router.push("/teacher/grading");
+    }, 1500);
   };
 
   const handleRequestRevision = () => {
@@ -84,6 +109,19 @@ export default function SubmissionGradingPage() {
       }, 1500);
     }, 600);
   };
+
+  if (!submission) {
+    return (
+      <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
+        <AppHeader user={teacher} onOpenSidebar={() => setIsSidebarOpen(true)} />
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={teacher} />
+        <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-12 text-center text-muted">
+          جاري تحميل بيانات التسليم...
+        </main>
+        <BottomNavigation user={teacher} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">

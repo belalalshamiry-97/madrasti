@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -16,16 +16,27 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { GradeBadge } from "@/components/common/GradeBadge";
-import { MOCK_USERS, MOCK_SUBMISSIONS } from "@/lib/mock-data";
+import { MOCK_USERS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import { getSubmissionsForStudent, AssignmentSubmission } from "@/lib/submission-store";
 
 export default function StudentGradesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const student = MOCK_USERS.student1;
+  const [student, setStudent] = useState(MOCK_USERS.student1);
+  const [gradedItems, setGradedItems] = useState<AssignmentSubmission[]>([]);
 
-  // Filter only graded submissions for student1
-  const gradedItems = MOCK_SUBMISSIONS.filter(
-    (s) => s.student_id === student.id && s.status === "graded"
-  );
+  useEffect(() => {
+    const active = getActiveUser("STUDENT");
+    setStudent(active);
+
+    const subs = getSubmissionsForStudent(active.id, active.username);
+    const graded = subs.filter((s) => s.status === "graded");
+    setGradedItems(graded);
+  }, []);
+
+  const totalScore = gradedItems.reduce((acc, curr) => acc + (curr.score || 0), 0);
+  const totalMax = gradedItems.reduce((acc, curr) => acc + curr.max_score, 0);
+  const percentage = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
@@ -68,21 +79,21 @@ export default function StudentGradesPage() {
                 المستوى الدراسي التراكمي
               </span>
               <h2 className="text-2xl sm:text-3xl font-black text-background mt-1">
-                ممتاز (98%) 🌟
+                {gradedItems.length > 0 ? `${percentage}% 🌟` : "قيد الرصد والتقييم"}
               </h2>
               <p className="text-xs text-background/90 mt-1">
-                أداء أكاديمي متفوق في مواد التخصص والعلوم
+                {gradedItems.length > 0 ? "سجل الدرجات المعتمدة من المعلمين في مختلف المواد" : "سيتم احتساب المعدل فور رصد درجات واجباتك وتكاليفك"}
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="bg-background/20 backdrop-blur p-3 rounded-2xl text-center">
-                <span className="block text-xl font-black">2</span>
+                <span className="block text-xl font-black">{gradedItems.length}</span>
                 <span className="text-[11px] font-medium opacity-90">مهام مصححة</span>
               </div>
               <div className="bg-background/20 backdrop-blur p-3 rounded-2xl text-center">
-                <span className="block text-xl font-black">100%</span>
-                <span className="text-[11px] font-medium opacity-90">نسبة الإنجاز</span>
+                <span className="block text-xl font-black">{gradedItems.length > 0 ? `${percentage}%` : "0%"}</span>
+                <span className="text-[11px] font-medium opacity-90">نسبة النجاح</span>
               </div>
             </div>
           </div>

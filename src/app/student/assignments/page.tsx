@@ -8,15 +8,33 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { MOCK_USERS, MOCK_ASSIGNMENTS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import { getSubjectsForGrade } from "@/lib/academic-store";
 
 export default function StudentAssignmentsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "late" | "pending">("all");
-  const student = MOCK_USERS.student1;
+  const [student, setStudent] = useState(MOCK_USERS.student1);
+  const [gradeSubjectNames, setGradeSubjectNames] = useState<string[]>([]);
+
+  React.useEffect(() => {
+    const active = getActiveUser("STUDENT");
+    setStudent(active);
+
+    const grade = active.grade || "الثالث الثانوي";
+    const subjects = getSubjectsForGrade(grade);
+    setGradeSubjectNames(subjects.map((s) => s.name.trim().toLowerCase()));
+  }, []);
 
   const filteredAssignments = MOCK_ASSIGNMENTS.filter((a) => {
-    if (filter === "all") return true;
-    return a.status === filter;
+    const matchesFilter = filter === "all" || a.status === filter;
+    if (gradeSubjectNames.length === 0) return matchesFilter;
+
+    const aCourse = a.course_name.trim().toLowerCase();
+    const matchesGrade = gradeSubjectNames.some(
+      (sName) => sName.includes(aCourse) || aCourse.includes(sName)
+    );
+    return matchesFilter && matchesGrade;
   });
 
   return (

@@ -22,6 +22,7 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
 import { getStoredGrades, AcademicGrade } from "@/lib/academic-store";
+import { saveStoredUser, AppUser } from "@/lib/user-store";
 
 interface EnrolledStudent {
   id: string;
@@ -35,6 +36,17 @@ interface EnrolledStudent {
   status: "active" | "suspended";
 }
 
+const ENROLLMENTS_STORAGE_KEY = "madrasti_enrollments_directory";
+
+const INITIAL_ENROLLED_STUDENTS: EnrolledStudent[] = [
+  { id: "1", name: "عمر أحمد بافضل", username: "student1", grade: "الثالث الثانوي", track: "علمي", section: "الشعبة (أ)", phone: "777888999", enrollmentDate: "2026-09-01", status: "active" },
+  { id: "2", name: "سارة خالد الكثيري", username: "student2", grade: "الثالث الثانوي", track: "علمي", section: "الشعبة (أ)", phone: "777999000", enrollmentDate: "2026-09-01", status: "active" },
+  { id: "3", name: "محمد ياسين اليافعي", username: "student3", grade: "الثالث الثانوي", track: "علمي", section: "الشعبة (ب)", phone: "777666555", enrollmentDate: "2026-09-02", status: "active" },
+  { id: "4", name: "أروى عبد الله بارحيم", username: "student4", grade: "الثاني الثانوي", track: "أدبي", section: "الشعبة (أ)", phone: "777444333", enrollmentDate: "2026-09-03", status: "active" },
+  { id: "5", name: "خالد سعيد العامري", username: "student5", grade: "الأول الثانوي", track: "عام", section: "الشعبة (أ)", phone: "777222111", enrollmentDate: "2026-09-05", status: "active" },
+  { id: "6", name: "فاطمة سالم باوزير", username: "student6", grade: "الأول الثانوي", track: "عام", section: "الشعبة (ب)", phone: "777123456", enrollmentDate: "2026-09-05", status: "active" },
+];
+
 export default function AdminEnrollmentsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const admin = MOCK_USERS.admin;
@@ -44,27 +56,33 @@ export default function AdminEnrollmentsPage() {
   const [sectionFilter, setSectionFilter] = useState("ALL");
   const [gradesList, setGradesList] = useState<AcademicGrade[]>([]);
 
+  const [students, setStudents] = useState<EnrolledStudent[]>(INITIAL_ENROLLED_STUDENTS);
+
   useEffect(() => {
     const list = getStoredGrades();
     setGradesList(list);
     if (list.length > 0) {
       setNewGrade(list[0].name);
     }
-  }, []);
 
-  const [students, setStudents] = useState<EnrolledStudent[]>([
-    { id: "1", name: "عمر أحمد بافضل", username: "student1", grade: "الثالث الثانوي", track: "علمي", section: "الشعبة (أ)", phone: "777888999", enrollmentDate: "2026-09-01", status: "active" },
-    { id: "2", name: "سارة خالد الكثيري", username: "student2", grade: "الثالث الثانوي", track: "علمي", section: "الشعبة (أ)", phone: "777999000", enrollmentDate: "2026-09-01", status: "active" },
-    { id: "3", name: "محمد ياسين اليافعي", username: "student3", grade: "الثالث الثانوي", track: "علمي", section: "الشعبة (ب)", phone: "777666555", enrollmentDate: "2026-09-02", status: "active" },
-    { id: "4", name: "أروى عبد الله بارحيم", username: "student4", grade: "الثاني الثانوي", track: "أدبي", section: "الشعبة (أ)", phone: "777444333", enrollmentDate: "2026-09-03", status: "active" },
-    { id: "5", name: "خالد سعيد العامري", username: "student5", grade: "الأول الثانوي", track: "عام", section: "الشعبة (أ)", phone: "777222111", enrollmentDate: "2026-09-05", status: "active" },
-    { id: "6", name: "فاطمة سالم باوزير", username: "student6", grade: "الأول الثانوي", track: "عام", section: "الشعبة (ب)", phone: "777123456", enrollmentDate: "2026-09-05", status: "active" },
-  ]);
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(ENROLLMENTS_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setStudents(parsed);
+          }
+        }
+      } catch {}
+    }
+  }, []);
 
   // Modal State for Registering New Student to Any Grade
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("123");
   const [newGrade, setNewGrade] = useState("الأول الثانوي");
   const [newTrack, setNewTrack] = useState("عام");
   const [newSection, setNewSection] = useState("الشعبة (أ)");
@@ -73,31 +91,61 @@ export default function AdminEnrollmentsPage() {
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => setToastMessage(null), 4500);
   };
 
   const handleRegisterStudent = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newUsername.trim()) return;
 
-    const newStudent: EnrolledStudent = {
+    const cleanUsername = newUsername.trim().toLowerCase();
+    const cleanPwd = newPassword.trim() || "123";
+
+    // 1. Save user to user-store so the student can immediately log in from /login
+    const studentUser: AppUser = {
       id: `std-${Date.now()}`,
-      name: newName.trim(),
-      username: newUsername.trim(),
+      full_name: newName.trim(),
+      username: cleanUsername,
+      password: cleanPwd,
+      role: "STUDENT",
+      grade: newGrade,
+      section: newSection,
+      phone: newPhone.trim() || "770000000",
+      permissions: [],
+      status: "active",
+      created_at: new Date().toISOString(),
+    };
+    saveStoredUser(studentUser);
+
+    // 2. Add to enrollment directory
+    const newStudent: EnrolledStudent = {
+      id: studentUser.id,
+      name: studentUser.full_name,
+      username: studentUser.username,
       grade: newGrade,
       track: newGrade === "الأول الثانوي" ? "عام" : newTrack,
       section: newSection,
-      phone: newPhone.trim() || "770000000",
+      phone: studentUser.phone,
       enrollmentDate: new Date().toISOString().split("T")[0],
       status: "active",
     };
 
-    setStudents((prev) => [newStudent, ...prev]);
+    setStudents((prev) => {
+      const updated = [newStudent, ...prev];
+      if (typeof window !== "undefined") {
+        localStorage.setItem(ENROLLMENTS_STORAGE_KEY, JSON.stringify(updated));
+      }
+      return updated;
+    });
+
     setIsRegisterModalOpen(false);
     setNewName("");
     setNewUsername("");
+    setNewPassword("123");
     setNewPhone("");
-    showToast(`تم تسجيل الطالب "${newStudent.name}" في ${newStudent.grade} (${newStudent.section}) بنجاح!`);
+    showToast(
+      `تم تسجيل الطالب "${newStudent.name}" وحفظه في بوابة تسجيل الدخول بنجاح! اسم الدخول: (${newStudent.username}) • كلمة المرور: (${cleanPwd})`
+    );
   };
 
   const handleReassign = (id: string) => {
@@ -324,17 +372,32 @@ export default function AdminEnrollmentsPage() {
 
                 <div>
                   <label className="block font-semibold text-foreground mb-1">
-                    رقم هاتف ولي الأمر
+                    كلمة مرور الدخول للمنصة
                   </label>
                   <input
                     type="text"
-                    placeholder="777123456"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
+                    required
+                    placeholder="123"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-mono focus:outline-none focus:border-brand-cyan"
                     dir="ltr"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-foreground mb-1">
+                  رقم هاتف ولي الأمر / الطالب
+                </label>
+                <input
+                  type="text"
+                  placeholder="777123456"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-mono focus:outline-none focus:border-brand-cyan"
+                  dir="ltr"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">

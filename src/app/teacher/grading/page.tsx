@@ -20,14 +20,16 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
-import { MOCK_USERS, MOCK_SUBMISSIONS, MockSubmissionWithDetails } from "@/lib/mock-data";
+import { MOCK_USERS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
 import { getStoredSubjects, SubjectAssignment } from "@/lib/academic-store";
+import { getSubmissionsForTeacher, AssignmentSubmission } from "@/lib/submission-store";
 
 export default function TeacherGradingQueuePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentTeacher, setCurrentTeacher] = useState(MOCK_USERS.teacher1);
   const [teacherSubjects, setTeacherSubjects] = useState<SubjectAssignment[]>([]);
+  const [submissionsList, setSubmissionsList] = useState<AssignmentSubmission[]>([]);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "graded">("all");
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>("ALL");
@@ -37,6 +39,10 @@ export default function TeacherGradingQueuePage() {
     const active = getActiveUser("TEACHER");
     setCurrentTeacher(active);
 
+    // Get submissions strictly for courses assigned to this teacher
+    const subs = getSubmissionsForTeacher(active.full_name, active.username);
+    setSubmissionsList(subs);
+
     // Get subjects assigned to this active teacher from academic store
     const allSubjects = getStoredSubjects();
     const assigned = allSubjects.filter(
@@ -45,35 +51,13 @@ export default function TeacherGradingQueuePage() {
         active.full_name.toLowerCase().includes(s.teacherName.toLowerCase())
     );
 
-    // If teacher has assigned subjects, use them; otherwise if teacher1/teacher2 fallback to default subject names
     setTeacherSubjects(assigned);
   }, []);
 
   // Filter submissions strictly to ONLY courses assigned to this teacher
   const teacherSubmissions = useMemo(() => {
-    const assignedNames = teacherSubjects.map((s) => s.name.trim().toLowerCase());
-
-    return MOCK_SUBMISSIONS.filter((sub) => {
-      // If teacher has explicitly assigned subjects in the store
-      if (assignedNames.length > 0) {
-        return assignedNames.some((assignedName) =>
-          sub.course_name.toLowerCase().includes(assignedName) ||
-          assignedName.includes(sub.course_name.toLowerCase())
-        );
-      }
-
-      // Default role fallback if no custom subjects assigned yet:
-      if (currentTeacher.username === "teacher1" || currentTeacher.full_name.includes("بلال")) {
-        return sub.course_name === "إدارة الشبكات" || sub.course_name.includes("شبكات");
-      }
-      if (currentTeacher.username === "teacher2" || currentTeacher.full_name.includes("فاطمة")) {
-        return sub.course_name === "الرياضيات التطبيقية" || sub.course_name === "أمنية النظم والشبكات";
-      }
-
-      // For any newly added teacher with no subjects assigned yet:
-      return false;
-    });
-  }, [teacherSubjects, currentTeacher]);
+    return submissionsList;
+  }, [submissionsList]);
 
   const filtered = useMemo(() => {
     return teacherSubmissions.filter((sub) => {

@@ -29,15 +29,54 @@ import {
   MOCK_ANNOUNCEMENTS,
 } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
+import { getSubjectsForGrade, SubjectAssignment } from "@/lib/academic-store";
 
 export default function StudentDashboardPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [student, setStudent] = useState(MOCK_USERS.student1);
+  const [studentSubjects, setStudentSubjects] = useState<SubjectAssignment[]>([]);
 
   React.useEffect(() => {
     const active = getActiveUser("STUDENT");
     if (active.role === "STUDENT") setStudent(active);
+
+    const grade = active.grade || "الثالث الثانوي";
+    const subjects = getSubjectsForGrade(grade);
+    setStudentSubjects(subjects);
   }, []);
+
+  const studentCourses = studentSubjects.map((s) => ({
+    id: `80000000-0000-0000-0000-000000000001`,
+    section_id: `sec-${s.grade}`,
+    subject_id: s.id,
+    teacher_id: `t-${s.teacherName}`,
+    semester_id: "20261",
+    subject: {
+      id: s.id,
+      name: s.name,
+      code: s.code,
+      subject_type: s.type,
+      icon_name: s.name.includes("شبكات")
+        ? "Network"
+        : s.name.includes("أمنية")
+        ? "ShieldCheck"
+        : s.name.includes("برمجة") || s.name.includes("حاسوب")
+        ? "Code2"
+        : "Calculator",
+    },
+    teacher: {
+      id: `t-${s.teacherName}`,
+      role: "TEACHER" as const,
+      full_name: s.teacherName,
+      username: s.teacherName.replace(/\s+/g, ""),
+      is_active: true,
+      created_at: "2026-09-01T00:00:00Z",
+      updated_at: "2026-09-01T00:00:00Z",
+    },
+    lessons_count: 4,
+    assignments_count: 3,
+    progress_percentage: 75,
+  }));
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
@@ -62,7 +101,7 @@ export default function StudentDashboardPage() {
                   الفصل الدراسي الأول • 20261
                 </span>
                 <span className="text-xs text-muted">
-                  الثالث الثانوي • شعبة (أ) — علمي
+                  {student.grade || "الثالث الثانوي"} • {student.section || "الشعبة (أ)"}
                 </span>
               </div>
               <h1 className="text-xl sm:text-2xl font-black text-foreground">
@@ -93,7 +132,7 @@ export default function StudentDashboardPage() {
           <div className="bg-surface p-4 rounded-2xl border border-border">
             <span className="text-xs text-muted block mb-1">المواد المسجلة</span>
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black text-foreground">4</span>
+              <span className="text-2xl font-black text-foreground">{studentCourses.length}</span>
               <BookOpen className="w-5 h-5 text-brand-cyan" />
             </div>
             <span className="text-[11px] text-brand-cyan mt-1 block">
@@ -213,9 +252,9 @@ export default function StudentDashboardPage() {
             </div>
 
             <div className="space-y-3">
-              {MOCK_COURSES.map((course) => (
+              {studentCourses.map((course, idx) => (
                 <CourseCard
-                  key={course.id}
+                  key={`${course.subject?.id}-${idx}`}
                   course={course}
                   basePath="/student/courses"
                 />

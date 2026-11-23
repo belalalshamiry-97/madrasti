@@ -65,6 +65,7 @@ export const INITIAL_SECTIONS: AcademicSection[] = [
 ];
 
 export const INITIAL_SUBJECTS: SubjectAssignment[] = [
+  // الثالث الثانوي
   {
     id: "sub-1",
     name: "إدارة الشبكات",
@@ -98,6 +99,64 @@ export const INITIAL_SUBJECTS: SubjectAssignment[] = [
     code: "MATH-304",
     type: "theory",
     grade: "الثالث الثانوي",
+    section: "الشعبة (أ) و (ب)",
+    teacherName: "أ. فاطمة العولقي",
+  },
+
+  // الثاني الثانوي
+  {
+    id: "sub-5",
+    name: "الرياضيات المتقدمة",
+    code: "MATH-201",
+    type: "theory",
+    grade: "الثاني الثانوي",
+    section: "الشعبة (أ)",
+    teacherName: "أ. فاطمة العولقي",
+  },
+  {
+    id: "sub-6",
+    name: "أساسيات شبكات الحاسوب",
+    code: "NET-201",
+    type: "practical",
+    grade: "الثاني الثانوي",
+    section: "الشعبة (أ)",
+    teacherName: "م. بلال الشميري",
+  },
+  {
+    id: "sub-7",
+    name: "الكيمياء والفيزياء العامة",
+    code: "SCI-201",
+    type: "practical",
+    grade: "الثاني الثانوي",
+    section: "الشعبة (ب)",
+    teacherName: "أ. فاطمة العولقي",
+  },
+
+  // الأول الثانوي
+  {
+    id: "sub-8",
+    name: "مبادئ الحاسوب وتقنية المعلومات",
+    code: "IT-101",
+    type: "practical",
+    grade: "الأول الثانوي",
+    section: "الشعبة (أ) و (ب)",
+    teacherName: "م. بلال الشميري",
+  },
+  {
+    id: "sub-9",
+    name: "الرياضيات العامة",
+    code: "MATH-101",
+    type: "theory",
+    grade: "الأول الثانوي",
+    section: "الشعبة (أ)",
+    teacherName: "أ. فاطمة العولقي",
+  },
+  {
+    id: "sub-10",
+    name: "اللغة العربية وقواعدها",
+    code: "ARAB-101",
+    type: "theory",
+    grade: "الأول الثانوي",
     section: "الشعبة (أ) و (ب)",
     teacherName: "أ. فاطمة العولقي",
   },
@@ -206,3 +265,33 @@ export function deleteStoredSubject(id: string): void {
   const updated = current.filter((s) => s.id !== id);
   localStorage.setItem(SUBJECTS_STORAGE_KEY, JSON.stringify(updated));
 }
+
+/**
+ * Returns subjects assigned to a specific grade
+ */
+export function getSubjectsForGrade(gradeName?: string): SubjectAssignment[] {
+  const subjects = getStoredSubjects();
+  if (!gradeName) return subjects;
+  const filtered = subjects.filter((s) => s.grade.trim() === gradeName.trim());
+  return filtered.length > 0 ? filtered : subjects;
+}
+
+/**
+ * Returns subjects assigned to a specific teacher
+ */
+export function getSubjectsForTeacher(
+  teacherFullName: string,
+  teacherUsername?: string
+): SubjectAssignment[] {
+  const subjects = getStoredSubjects();
+  const cleanName = teacherFullName ? teacherFullName.trim().toLowerCase() : "";
+  const cleanUser = teacherUsername ? teacherUsername.trim().toLowerCase() : "";
+
+  return subjects.filter((s) => {
+    const sTeacher = s.teacherName.trim().toLowerCase();
+    if (cleanName && (sTeacher.includes(cleanName) || cleanName.includes(sTeacher))) return true;
+    if (cleanUser && sTeacher.includes(cleanUser)) return true;
+    return false;
+  });
+}
+

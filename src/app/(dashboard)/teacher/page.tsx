@@ -21,29 +21,38 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { CourseCard } from "@/components/courses/CourseCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
-import { MOCK_USERS, MOCK_COURSES, MOCK_SUBMISSIONS } from "@/lib/mock-data";
+import { MOCK_USERS, MOCK_COURSES } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
+import { getStoredSubjects, SubjectAssignment } from "@/lib/academic-store";
+import { getSubmissionsForTeacher, AssignmentSubmission } from "@/lib/submission-store";
 
 export default function TeacherDashboardPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [teacher, setTeacher] = useState(MOCK_USERS.teacher1);
+  const [assignedSubjects, setAssignedSubjects] = useState<SubjectAssignment[]>([]);
+  const [pendingSubmissions, setPendingSubmissions] = useState<AssignmentSubmission[]>([]);
 
   React.useEffect(() => {
     const active = getActiveUser("TEACHER");
     if (active.role === "TEACHER") setTeacher(active);
+
+    // Get subjects assigned to this active teacher
+    const allSubs = getStoredSubjects();
+    const assigned = allSubs.filter(
+      (s) =>
+        s.teacherName.toLowerCase().includes(active.full_name.toLowerCase()) ||
+        active.full_name.toLowerCase().includes(s.teacherName.toLowerCase())
+    );
+    setAssignedSubjects(assigned);
+
+    // Get pending submissions strictly for this teacher's courses
+    const subs = getSubmissionsForTeacher(active.full_name, active.username);
+    setPendingSubmissions(
+      subs.filter((s) => s.status === "submitted" || s.status === "late")
+    );
   }, []);
 
-  // Filter courses taught by this teacher
-  const teacherCourses = MOCK_COURSES.filter(
-    (c) => c.teacher_id === teacher.id
-  );
-
-  const primaryCourseId = teacherCourses[0]?.id || "80000000-0000-0000-0000-000000000001";
-
-  // Submissions waiting for grading
-  const pendingSubmissions = MOCK_SUBMISSIONS.filter(
-    (s) => s.status === "submitted" || s.status === "late"
-  );
+  const primaryCourseId = "80000000-0000-0000-0000-000000000001";
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
@@ -185,56 +194,62 @@ export default function TeacherDashboardPage() {
             </div>
 
             <div className="space-y-3">
-              {teacherCourses.map((course) => (
-                <div
-                  key={course.id}
-                  className="p-5 rounded-3xl bg-surface border border-border hover:border-brand-teal/40 transition-all shadow-card space-y-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-surface-secondary text-brand-teal flex items-center justify-center">
-                        <BookOpen className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-bold text-foreground">
-                          {course.subject?.name}
-                        </h3>
-                        <span className="text-xs text-muted">
-                          شعبة (أ) • {course.lessons_count} دروس منشورة
-                        </span>
-                      </div>
-                    </div>
-
-                    <StatusBadge
-                      type={course.subject?.subject_type || "theory"}
-                      label={course.subject?.subject_type === "theory" ? "نظري" : "عملي"}
-                    />
-                  </div>
-
-                  <div className="pt-3 border-t border-border/60 flex items-center justify-between">
-                    <span className="text-xs text-muted">
-                      الفصل الدراسي الأول • 20261
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/teacher/courses/${course.id}/lessons`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-xs font-semibold text-foreground transition-colors"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-brand-teal" />
-                        إدارة الدروس
-                      </Link>
-                      <Link
-                        href={`/teacher/courses/${course.id}/lessons/new`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-teal/20 hover:bg-brand-teal/30 text-brand-teal text-xs font-bold transition-colors"
-                      >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        إضافة درس
-                      </Link>
-                    </div>
-                  </div>
+              {assignedSubjects.length === 0 ? (
+                <div className="p-8 rounded-3xl bg-surface border border-border text-center text-muted text-xs">
+                  لم يتم إسناد مواد دراسية لك بعد. يرجى مراجعة إدارة المدرسة لإسناد المواد وشعب التدريس.
                 </div>
-              ))}
+              ) : (
+                assignedSubjects.map((subject) => (
+                  <div
+                    key={subject.id}
+                    className="p-5 rounded-3xl bg-surface border border-border hover:border-brand-teal/40 transition-all shadow-card space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-surface-secondary text-brand-teal flex items-center justify-center font-bold text-sm">
+                          <BookOpen className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-bold text-foreground">
+                            {subject.name}
+                          </h3>
+                          <span className="text-xs text-muted">
+                            {subject.grade} • {subject.section} • ({subject.code})
+                          </span>
+                        </div>
+                      </div>
+
+                      <StatusBadge
+                        type={subject.type === "theory" ? "theory" : "practical"}
+                        label={subject.type === "theory" ? "نظري" : "عملي"}
+                      />
+                    </div>
+
+                    <div className="pt-3 border-t border-border/60 flex items-center justify-between">
+                      <span className="text-xs text-muted">
+                        الفصل الدراسي الأول • 20261
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/teacher/courses/${primaryCourseId}/lessons`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-xs font-semibold text-foreground transition-colors"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-brand-teal" />
+                          إدارة الدروس
+                        </Link>
+                        <Link
+                          href={`/teacher/courses/${primaryCourseId}/lessons/new`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-teal/20 hover:bg-brand-teal/30 text-brand-teal text-xs font-bold transition-colors"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          إضافة درس
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </section>
 

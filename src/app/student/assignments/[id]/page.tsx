@@ -24,38 +24,55 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { GradeBadge } from "@/components/common/GradeBadge";
-import { MOCK_USERS, MOCK_ASSIGNMENTS, MOCK_SUBMISSIONS } from "@/lib/mock-data";
+import { MOCK_USERS, MOCK_ASSIGNMENTS } from "@/lib/mock-data";
 import { validateFile, formatBytes } from "@/lib/storage";
+import { getActiveUser } from "@/lib/user-store";
+import {
+  getStoredSubmissions,
+  saveStoredSubmission,
+  AssignmentSubmission,
+} from "@/lib/submission-store";
 
 export default function StudentAssignmentDetailsPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const student = MOCK_USERS.student1;
+  const [student, setStudent] = useState(MOCK_USERS.student1);
   const params = useParams();
   const assignmentId = params?.id as string;
 
   const assignment =
     MOCK_ASSIGNMENTS.find((a) => a.id === assignmentId) || MOCK_ASSIGNMENTS[0];
 
-  // Check if student has an existing submission
-  const existingSubmission = MOCK_SUBMISSIONS.find(
-    (s) => s.assignment_id === assignment.id && s.student_id === student.id
-  );
-
-  const [answerText, setAnswerText] = useState(
-    existingSubmission?.answer_text || ""
-  );
-  const [solutionFiles, setSolutionFiles] = useState<
-    { name: string; size: number }[]
-  >(existingSubmission?.files || []);
+  const [existingSubmission, setExistingSubmission] = useState<AssignmentSubmission | null>(null);
+  const [answerText, setAnswerText] = useState("");
+  const [solutionFiles, setSolutionFiles] = useState<{ name: string; size: number }[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
 
   const [submissionStatus, setSubmissionStatus] = useState<
     "not_started" | "draft" | "submitted" | "graded"
-  >(existingSubmission?.status === "graded" ? "graded" : existingSubmission ? "submitted" : "not_started");
+  >("not_started");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const active = getActiveUser("STUDENT");
+    setStudent(active);
+
+    const allSubs = getStoredSubmissions();
+    const found = allSubs.find(
+      (s) =>
+        (s.assignment_id === assignment.id || s.assignment_title === assignment.title) &&
+        (s.student_id === active.id || s.student_username.toLowerCase() === active.username.toLowerCase())
+    );
+
+    if (found) {
+      setExistingSubmission(found);
+      setAnswerText(found.answer_text || "");
+      setSolutionFiles(found.files || []);
+      setSubmissionStatus(found.status === "graded" ? "graded" : "submitted");
+    }
+  }, [assignment.id, assignment.title]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError(null);
@@ -91,10 +108,42 @@ export default function StudentAssignmentDetailsPage() {
     }
 
     setIsSubmitting(true);
+    const nowFormatted = new Date().toLocaleString("ar-YE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const newSub: AssignmentSubmission = {
+      id: existingSubmission?.id || `sub-${Date.now()}`,
+      assignment_id: assignment.id,
+      assignment_title: assignment.title,
+      course_name: assignment.course_name,
+      grade: student.grade || "الثالث الثانوي",
+      student_id: student.id,
+      student_name: student.full_name,
+      student_username: student.username,
+      attempt_number: (existingSubmission?.attempt_number || 0) + 1,
+      answer_text: answerText.trim(),
+      status: "submitted",
+      submitted_at: nowFormatted,
+      files: solutionFiles.map((f) => ({ name: f.name, size: f.size, url: "#" })),
+      max_score: 10,
+      score: null,
+      feedback_notes: null,
+    };
+
+    saveStoredSubmission(newSub);
+    setExistingSubmission(newSub);
+
     setTimeout(() => {
       setIsSubmitting(false);
       setSubmissionStatus("submitted");
-      setSuccessMessage("تم تأكيد إرسال حل الواجب بنجاح إلى المعلم المصحح!");
+      setSuccessMessage(
+        `تم تأكيد إرسال حل الواجب بنجاح إلى المعلم المصحح! وقت الرفع: ${nowFormatted}`
+      );
     }, 700);
   };
 

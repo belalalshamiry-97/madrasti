@@ -137,6 +137,8 @@ export default function AdminUsersPermissionsPage() {
       password: newPassword.trim() || "123", // Set specified password
       role: newRole,
       phone: newPhone.trim() || "770000000",
+      grade: newRole === "STUDENT" ? "الثالث الثانوي" : undefined,
+      section: newRole === "STUDENT" ? "الشعبة (أ)" : undefined,
       permissions: newRole === "ADMIN" ? SYSTEM_PERMISSIONS.map((p) => p.id) : newSelectedPermissions,
       status: "active",
       created_at: new Date().toISOString(),

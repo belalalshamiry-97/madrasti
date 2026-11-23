@@ -11,19 +11,32 @@ import {
   ChevronRight,
   Search,
   Filter,
-  UserCheck,
-  ShieldAlert,
   GraduationCap,
   BookOpen,
   X,
-  Save,
+  CheckSquare,
+  Square,
+  BadgeCheck,
+  Edit2,
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
+import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
 import { UserRole } from "@/types/database.types";
 import { cn } from "@/lib/utils";
+
+// Available granular permissions in the school LMS
+const SYSTEM_PERMISSIONS = [
+  { id: "manage_classes", label: "إدارة الصفوف والشعب" },
+  { id: "view_attendance", label: "كشوفات الحضور والغياب" },
+  { id: "manage_grades", label: "رصد واعتماد الدرجات" },
+  { id: "broadcast_announcements", label: "إرسال الإعلانات والتعاميم" },
+  { id: "manage_users", label: "إدارة حسابات وصلاحيات المستخدمين" },
+  { id: "assign_teachers", label: "إسناد المعلمين للمناهج" },
+  { id: "view_reports", label: "عرض التقارير والمؤشرات" },
+] as const;
 
 interface ManagedUser {
   id: string;
@@ -31,6 +44,7 @@ interface ManagedUser {
   username: string;
   role: UserRole;
   phone: string;
+  permissions: string[]; // List of permission IDs
   status: "active" | "suspended";
 }
 
@@ -45,6 +59,15 @@ export default function AdminUsersPermissionsPage() {
       username: "admin",
       role: "ADMIN",
       phone: "777111222",
+      permissions: [
+        "manage_classes",
+        "view_attendance",
+        "manage_grades",
+        "broadcast_announcements",
+        "manage_users",
+        "assign_teachers",
+        "view_reports",
+      ],
       status: "active",
     },
     {
@@ -52,7 +75,8 @@ export default function AdminUsersPermissionsPage() {
       full_name: "م. بلال الشميري",
       username: "teacher1",
       role: "TEACHER",
-      phone: "777333444",
+      phone: "783085075",
+      permissions: ["view_attendance", "manage_grades", "broadcast_announcements", "view_reports"],
       status: "active",
     },
     {
@@ -61,6 +85,7 @@ export default function AdminUsersPermissionsPage() {
       username: "teacher2",
       role: "TEACHER",
       phone: "777555666",
+      permissions: ["view_attendance", "manage_grades", "broadcast_announcements"],
       status: "active",
     },
     {
@@ -69,6 +94,7 @@ export default function AdminUsersPermissionsPage() {
       username: "student1",
       role: "STUDENT",
       phone: "777888999",
+      permissions: [],
       status: "active",
     },
     {
@@ -77,6 +103,7 @@ export default function AdminUsersPermissionsPage() {
       username: "student2",
       role: "STUDENT",
       phone: "777999000",
+      permissions: [],
       status: "active",
     },
   ]);
@@ -84,29 +111,55 @@ export default function AdminUsersPermissionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | UserRole>("ALL");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingPermissionsUser, setEditingPermissionsUser] = useState<ManagedUser | null>(null);
 
   // New User Form State
   const [newFullName, setNewFullName] = useState("");
   const [newUsername, setNewUsername] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("TEACHER");
   const [newPhone, setNewPhone] = useState("");
-  const [newPassword, setNewPassword] = useState("");
+  const [newSelectedPermissions, setNewSelectedPermissions] = useState<string[]>([
+    "view_attendance",
+    "manage_grades",
+  ]);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleRoleChange = (userId: string, newRole: UserRole) => {
+  const handleTogglePermissionInNew = (permId: string) => {
+    setNewSelectedPermissions((prev) =>
+      prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId]
+    );
+  };
+
+  const handleTogglePermissionInEdit = (permId: string) => {
+    if (!editingPermissionsUser) return;
+    const current = editingPermissionsUser.permissions || [];
+    const updated = current.includes(permId)
+      ? current.filter((p) => p !== permId)
+      : [...current, permId];
+
+    setEditingPermissionsUser({
+      ...editingPermissionsUser,
+      permissions: updated,
+    });
+  };
+
+  const handleSaveEditedPermissions = () => {
+    if (!editingPermissionsUser) return;
     setUsersList((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
+      prev.map((u) =>
+        u.id === editingPermissionsUser.id
+          ? { ...u, permissions: editingPermissionsUser.permissions }
+          : u
+      )
     );
-    const targetUser = usersList.find((u) => u.id === userId);
-    showToast(
-      `تم تعديل صلاحية "${targetUser?.full_name}" بنجاح إلى: ${getRoleTitle(newRole)}`
-    );
+    showToast(`تم تحديث صلاحيات "${editingPermissionsUser.full_name}" بنجاح!`);
+    setEditingPermissionsUser(null);
   };
 
   const handleCreateUser = (e: React.FormEvent) => {
@@ -119,6 +172,7 @@ export default function AdminUsersPermissionsPage() {
       username: newUsername.trim(),
       role: newRole,
       phone: newPhone.trim() || "—",
+      permissions: newRole === "ADMIN" ? SYSTEM_PERMISSIONS.map((p) => p.id) : newSelectedPermissions,
       status: "active",
     };
 
@@ -127,16 +181,16 @@ export default function AdminUsersPermissionsPage() {
     setNewFullName("");
     setNewUsername("");
     setNewPhone("");
-    setNewPassword("");
-    showToast(`تم إنشاء المستخدم ومنحه صلاحية "${getRoleTitle(newRole)}" بنجاح!`);
+    setNewSelectedPermissions(["view_attendance", "manage_grades"]);
+    showToast(`تم إنشاء المستخدم ومنحه ${newUser.permissions.length} صلاحيات بنجاح!`);
   };
 
   const getRoleTitle = (role: UserRole) => {
     switch (role) {
       case "ADMIN":
-        return "مدير المدرسة (صلاحية كاملة)";
+        return "مدير المدرسة (صلاحيات كاملة)";
       case "TEACHER":
-        return "معلم";
+        return "معلم / كادر تعليمي";
       case "STUDENT":
         return "طالب";
     }
@@ -152,16 +206,8 @@ export default function AdminUsersPermissionsPage() {
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
-      <AppHeader
-        user={admin}
-        onOpenSidebar={() => setIsSidebarOpen(true)}
-      />
-
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        user={admin}
-      />
+      <AppHeader user={admin} onOpenSidebar={() => setIsSidebarOpen(true)} />
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={admin} />
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Header Breadcrumb */}
@@ -174,12 +220,12 @@ export default function AdminUsersPermissionsPage() {
               <ChevronRight className="w-6 h-6" />
             </Link>
             <div>
-              <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-                <Shield className="w-5 h-5 text-status-warning" />
-                إدارة المستخدمين وصلاحيات الدخول
+              <h1 className="text-xl font-black text-foreground flex items-center gap-2">
+                <Shield className="w-6 h-6 text-status-warning" />
+                إدارة المستخدمين وتحديد الصلاحيات المتعددة
               </h1>
               <p className="text-xs text-muted">
-                تعيين صلاحيات مديري المدرسة، المعلمين، والطلاب وتحديد أدوارهم
+                إمكانية تحديد أكثر من صلاحية لكل مستخدم وتعيين الأدوار والمهام الإدارية
               </p>
             </div>
           </div>
@@ -189,7 +235,7 @@ export default function AdminUsersPermissionsPage() {
             className="px-4 py-2 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center justify-center gap-1.5 hover:brightness-110 shadow-glow transition-all"
           >
             <UserPlus className="w-4 h-4" />
-            إضافة مستخدم وتعيين صلاحية
+            إضافة مستخدم وتحديد صلاحياته
           </button>
         </div>
 
@@ -265,12 +311,13 @@ export default function AdminUsersPermissionsPage() {
           </div>
         </div>
 
-        {/* Users Table */}
-        <div className="p-4 sm:p-6 rounded-3xl bg-surface border border-border shadow-card space-y-3">
+        {/* Users List Card */}
+        <div className="p-4 sm:p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
           <div className="hidden sm:grid sm:grid-cols-12 text-xs font-bold text-muted pb-3 border-b border-border">
-            <span className="col-span-5">اسم المستخدم والحساب</span>
-            <span className="col-span-4 text-center">الصلاحية ونوع الحساب</span>
-            <span className="col-span-3 text-left">تعديل الصلاحية فورياً</span>
+            <span className="col-span-4">المستخدم والحساب</span>
+            <span className="col-span-2 text-center">الدور الأساسي</span>
+            <span className="col-span-4 text-center">الصلاحيات المحددة</span>
+            <span className="col-span-2 text-left">تعديل الصلاحيات</span>
           </div>
 
           <div className="space-y-3">
@@ -280,7 +327,7 @@ export default function AdminUsersPermissionsPage() {
                 className="p-4 rounded-2xl bg-surface-secondary/50 border border-border flex flex-col sm:grid sm:grid-cols-12 sm:items-center gap-3 transition-colors hover:border-brand-cyan/30"
               >
                 {/* User Info */}
-                <div className="col-span-5 flex items-center gap-3">
+                <div className="col-span-4 flex items-center gap-3">
                   <div
                     className={cn(
                       "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0",
@@ -302,7 +349,7 @@ export default function AdminUsersPermissionsPage() {
                       {userItem.full_name}
                       {userItem.role === "ADMIN" && (
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-status-warning/20 text-status-warning font-black">
-                          مسؤول
+                          مدير
                         </span>
                       )}
                     </h4>
@@ -313,10 +360,10 @@ export default function AdminUsersPermissionsPage() {
                 </div>
 
                 {/* Role Pill */}
-                <div className="col-span-4 text-center">
+                <div className="col-span-2 text-center">
                   <span
                     className={cn(
-                      "px-3 py-1 rounded-full text-xs font-bold inline-block",
+                      "px-2.5 py-1 rounded-full text-xs font-bold inline-block",
                       userItem.role === "ADMIN"
                         ? "bg-status-warning/20 text-status-warning border border-status-warning/40"
                         : userItem.role === "TEACHER"
@@ -324,29 +371,130 @@ export default function AdminUsersPermissionsPage() {
                         : "bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/40"
                     )}
                   >
-                    {getRoleTitle(userItem.role)}
+                    {userItem.role}
                   </span>
                 </div>
 
-                {/* Instant Role Selector */}
-                <div className="col-span-3 text-left">
-                  <select
-                    value={userItem.role}
-                    onChange={(e) =>
-                      handleRoleChange(userItem.id, e.target.value as UserRole)
-                    }
-                    className="px-2.5 py-1.5 rounded-xl bg-surface border border-border text-foreground text-xs font-bold focus:outline-none focus:border-brand-cyan cursor-pointer"
-                  >
-                    <option value="ADMIN">مدير (ADMIN)</option>
-                    <option value="TEACHER">معلم (TEACHER)</option>
-                    <option value="STUDENT">طالب (STUDENT)</option>
-                  </select>
+                {/* Multiple Permissions Badges */}
+                <div className="col-span-4 flex flex-wrap gap-1 justify-center sm:justify-start">
+                  {userItem.role === "STUDENT" ? (
+                    <span className="text-[11px] text-muted">صلاحيات منصة الطالب القياسية</span>
+                  ) : userItem.role === "ADMIN" ? (
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-status-warning/15 text-status-warning border border-status-warning/30">
+                      كامل صلاحيات المنصة (7 صلاحيات)
+                    </span>
+                  ) : (
+                    userItem.permissions.map((pId) => {
+                      const pObj = SYSTEM_PERMISSIONS.find((p) => p.id === pId);
+                      return (
+                        <span
+                          key={pId}
+                          className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-surface border border-border text-brand-cyan"
+                        >
+                          {pObj ? pObj.label : pId}
+                        </span>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Edit Button */}
+                <div className="col-span-2 text-left">
+                  {userItem.role !== "STUDENT" && (
+                    <button
+                      onClick={() => setEditingPermissionsUser(userItem)}
+                      className="px-3 py-1.5 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-foreground text-xs font-bold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-brand-cyan" />
+                      <span>تحديد الصلاحيات</span>
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
+
+        <DeveloperFooter />
       </main>
+
+      {/* Edit Permissions Modal */}
+      {editingPermissionsUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-surface p-6 rounded-3xl border border-border shadow-2xl max-w-md w-full space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-status-warning" />
+                <h3 className="text-base font-bold text-foreground">
+                  تحديد الصلاحيات الممنوحة
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingPermissionsUser(null)}
+                className="p-1 rounded-xl text-muted hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-surface-secondary border border-border">
+                <span className="text-muted block">المستخدم:</span>
+                <span className="font-bold text-foreground text-sm">
+                  {editingPermissionsUser.full_name} (@{editingPermissionsUser.username})
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-foreground mb-2">
+                  اختر الصلاحيات المتاحة لهذا الحساب (تحديد متعدد):
+                </label>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {SYSTEM_PERMISSIONS.map((perm) => {
+                    const isChecked = editingPermissionsUser.permissions.includes(perm.id);
+                    return (
+                      <div
+                        key={perm.id}
+                        onClick={() => handleTogglePermissionInEdit(perm.id)}
+                        className={cn(
+                          "p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all",
+                          isChecked
+                            ? "bg-brand-cyan/15 border-brand-cyan/40 text-foreground"
+                            : "bg-surface-secondary/50 border-border text-muted hover:border-brand-cyan/20"
+                        )}
+                      >
+                        <span className="font-semibold">{perm.label}</span>
+                        {isChecked ? (
+                          <CheckSquare className="w-4 h-4 text-brand-cyan" />
+                        ) : (
+                          <Square className="w-4 h-4 text-muted" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setEditingPermissionsUser(null)}
+                  className="px-4 py-2 rounded-xl bg-surface-secondary text-muted hover:text-foreground"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEditedPermissions}
+                  className="px-5 py-2 rounded-xl bg-brand-cyan text-background font-bold shadow-glow"
+                >
+                  حفظ الصلاحيات المحددة
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add User Modal */}
       {isAddModalOpen && (
@@ -391,7 +539,7 @@ export default function AdminUsersPermissionsPage() {
                     placeholder="salem2026"
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan font-mono"
+                    className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-mono focus:outline-none focus:border-brand-cyan"
                     dir="ltr"
                   />
                 </div>
@@ -405,7 +553,7 @@ export default function AdminUsersPermissionsPage() {
                     placeholder="777123456"
                     value={newPhone}
                     onChange={(e) => setNewPhone(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan font-mono"
+                    className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-mono focus:outline-none focus:border-brand-cyan"
                     dir="ltr"
                   />
                 </div>
@@ -413,32 +561,50 @@ export default function AdminUsersPermissionsPage() {
 
               <div>
                 <label className="block font-semibold text-foreground mb-1">
-                  صلاحية الدخول والنظام
+                  نوع الحساب الأساسي
                 </label>
                 <select
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value as UserRole)}
                   className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                 >
-                  <option value="TEACHER">معلم (صلاحية التدريس والتصحيح)</option>
-                  <option value="ADMIN">مدير المدرسة (صلاحية كاملة للإدارة)</option>
-                  <option value="STUDENT">طالب (صلاحية التعلم وحل الواجبات)</option>
+                  <option value="TEACHER">معلم (كادر تعليمي)</option>
+                  <option value="ADMIN">مدير المدرسة (إدارة عامة)</option>
+                  <option value="STUDENT">طالب (بوابة التعلم)</option>
                 </select>
               </div>
 
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  كلمة المرور الأولية
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
-                />
-              </div>
+              {newRole === "TEACHER" && (
+                <div>
+                  <label className="block font-bold text-foreground mb-1.5">
+                    الصلاحيات الإضافية الممنوحة للمعلم:
+                  </label>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {SYSTEM_PERMISSIONS.map((perm) => {
+                      const isChecked = newSelectedPermissions.includes(perm.id);
+                      return (
+                        <div
+                          key={perm.id}
+                          onClick={() => handleTogglePermissionInNew(perm.id)}
+                          className={cn(
+                            "p-2 rounded-xl border flex items-center justify-between cursor-pointer text-[11px]",
+                            isChecked
+                              ? "bg-brand-cyan/15 border-brand-cyan/40 text-foreground"
+                              : "bg-surface-secondary/40 border-border text-muted"
+                          )}
+                        >
+                          <span>{perm.label}</span>
+                          {isChecked ? (
+                            <CheckSquare className="w-3.5 h-3.5 text-brand-cyan" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5 text-muted" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
                 <button
@@ -452,7 +618,7 @@ export default function AdminUsersPermissionsPage() {
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-brand-cyan text-background font-bold shadow-glow"
                 >
-                  إنشاء الحساب والصلاحية
+                  إنشاء الحساب والصلاحيات
                 </button>
               </div>
             </form>

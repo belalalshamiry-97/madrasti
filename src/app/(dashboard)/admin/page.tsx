@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  CalendarDays,
+  Percent,
   Users,
   GraduationCap,
   Layers,
@@ -226,25 +228,50 @@ export default function AdminDashboardPage() {
               </p>
             </Link>
 
-            <div className="p-5 rounded-2xl bg-surface border border-border hover:border-brand-cyan/40 transition-all space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-cyan/15 text-brand-cyan flex items-center justify-center">
-                <GraduationCap className="w-5 h-5" />
+            <Link
+              href="/admin/attendance"
+              className="p-5 rounded-2xl bg-surface border border-border hover:border-brand-cyan/40 transition-all space-y-3 block group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-brand-cyan/15 text-brand-cyan flex items-center justify-center group-hover:scale-105 transition-transform">
+                <CalendarDays className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-foreground">الكادر التعليمي</h3>
+              <h3 className="text-base font-bold text-foreground group-hover:text-brand-cyan transition-colors">
+                كشوفات الحضور والغياب لجميع الطلاب
+              </h3>
               <p className="text-xs text-muted leading-relaxed">
-                إدارة ملفات المعلمين، مراجعة نصاب الحصص، ومتابعة سجلات التدريس.
+                سجلات الحضور اليومية لجميع الصفوف والشعب مرتبة بالتاريخ مع إمكانية التعديل والاعتماد.
               </p>
-            </div>
+            </Link>
 
-            <div className="p-5 rounded-2xl bg-surface border border-border hover:border-brand-teal/40 transition-all space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-teal/15 text-brand-teal flex items-center justify-center">
+            <Link
+              href="/admin/results"
+              className="p-5 rounded-2xl bg-surface border border-border hover:border-brand-teal/40 transition-all space-y-3 block group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-brand-teal/15 text-brand-teal flex items-center justify-center group-hover:scale-105 transition-transform">
+                <Percent className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-foreground group-hover:text-brand-teal transition-colors">
+                نتائج الطلاب لكل فصل ولكل سنة
+              </h3>
+              <p className="text-xs text-muted leading-relaxed">
+                الكشوفات الرسمية للنتائج، الدرجات، ونسب النجاح والتقدير لجميع المراحل الدراسية.
+              </p>
+            </Link>
+
+            <Link
+              href="/announcements"
+              className="p-5 rounded-2xl bg-surface border border-border hover:border-status-warning/40 transition-all space-y-3 block group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-status-warning/15 text-status-warning flex items-center justify-center group-hover:scale-105 transition-transform">
                 <Megaphone className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-foreground">الإعلانات المدرسية</h3>
+              <h3 className="text-base font-bold text-foreground group-hover:text-status-warning transition-colors">
+                إرسال الإشعارات والتعاميم المدرسية
+              </h3>
               <p className="text-xs text-muted leading-relaxed">
-                نشر الإعلانات العامة للمدرسة بأكملها، أو توجيه إعلانات خاصة بالمعلمين أو الطلاب.
+                نشر إشعارات وتوجيهها للطلاب أو المعلمين أو لشعب محددة فورياً.
               </p>
-            </div>
+            </Link>
 
             <div className="p-5 rounded-2xl bg-surface border border-border hover:border-brand-cyan/40 transition-all space-y-3">
               <div className="w-10 h-10 rounded-xl bg-surface-secondary text-foreground flex items-center justify-center">

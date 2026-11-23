@@ -8,19 +8,24 @@ import {
   User,
   CreditCard,
   MessageSquare,
-  Compass,
-  QrCode,
   CalendarDays,
   Users,
   BookOpen,
   Percent,
   Trophy,
-  AlertTriangle,
   Settings,
   LogOut,
   GraduationCap,
   BarChart3,
   HelpCircle,
+  Layers,
+  FileSpreadsheet,
+  Megaphone,
+  UserPlus,
+  Shield,
+  FileCheck,
+  ClipboardList,
+  LayoutDashboard,
 } from "lucide-react";
 import { Profile } from "@/types/database.types";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -35,49 +40,131 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
   const pathname = usePathname();
 
-  const getResultsLink = () => {
-    if (user.role === "TEACHER") return "/teacher/grading";
-    if (user.role === "STUDENT") return "/student/grades";
-    return "/admin/reports";
-  };
-
-  const getAttendanceLink = () => {
-    if (user.role === "TEACHER") return "/teacher/attendance";
-    if (user.role === "STUDENT") return "/student/attendance";
-    return "/admin/reports";
-  };
-
-  const getQuizzesLink = () => {
-    if (user.role === "TEACHER") return "/teacher/quizzes/new";
-    if (user.role === "STUDENT") return "/student/quizzes";
-    return "/admin/reports";
-  };
-
-  const menuItems = [
-    { label: "ملفي الشخصي", href: "/profile", icon: User },
+  // Admin menu strictly tailored for School Principal (NO student items)
+  const adminMenuItems = [
+    { label: "لوحة التحكم الإدارية", href: "/admin", icon: LayoutDashboard },
+    { isDivider: true },
     {
-      label: "البطاقة الإلكترونية",
+      label: "كشوفات الحضور لجميع الطلاب",
+      href: "/admin/attendance",
+      icon: CalendarDays,
+      badge: "يومي",
+    },
+    {
+      label: "تسجيل وقيد الطلاب بالشعب",
+      href: "/admin/enrollments",
+      icon: UserPlus,
+    },
+    {
+      label: "قائمة نتائج الطلاب لكل فصل وسنة",
+      href: "/admin/results",
+      icon: Percent,
+      badge: "معتمد",
+    },
+    {
+      label: "إدارة المستخدمين والصلاحيات",
+      href: "/admin/users",
+      icon: Shield,
+    },
+    {
+      label: "إرسال الإشعارات والتعاميم",
+      href: "/announcements",
+      icon: Megaphone,
+    },
+    { isDivider: true },
+    {
+      label: "الصفوف والشعب الدراسية",
+      href: "/admin/classes",
+      icon: Layers,
+    },
+    {
+      label: "المواد وإسناد المعلمين",
+      href: "/admin/subjects",
+      icon: BookOpen,
+    },
+    {
+      label: "التقارير والمؤشرات الأكاديمية",
+      href: "/admin/reports",
+      icon: BarChart3,
+    },
+    { isDivider: true },
+    { label: "إعدادات المدرسة العامة", href: "/settings", icon: Settings },
+  ];
+
+  // Teacher menu strictly tailored for Teachers (NO student items)
+  const teacherMenuItems = [
+    { label: "لوحة تحكم المعلم", href: "/teacher", icon: LayoutDashboard },
+    { isDivider: true },
+    {
+      label: "مقرراتي المسندة",
+      href: "/teacher/courses",
+      icon: BookOpen,
+    },
+    {
+      label: "كشف التحضير اليومي",
+      href: "/teacher/attendance",
+      icon: CalendarDays,
+    },
+    {
+      label: "سجل وطابور التصحيح",
+      href: "/teacher/grading",
+      icon: FileCheck,
+      badge: "مهام",
+    },
+    {
+      label: "الاختبارات وبنك الأسئلة",
+      href: "/teacher/quizzes/new",
+      icon: HelpCircle,
+    },
+    {
+      label: "إدارة الواجبات والتكليفات",
+      href: "/teacher/assignments",
+      icon: ClipboardList,
+    },
+    {
+      label: "محادثات واستفسارات الطلاب",
+      href: "/messages",
+      icon: MessageSquare,
+    },
+    {
+      label: "الإعلانات المدرسية",
+      href: "/announcements",
+      icon: Megaphone,
+    },
+    { isDivider: true },
+    { label: "ملفي الشخصي", href: "/profile", icon: User },
+    { label: "الإعدادات", href: "/settings", icon: Settings },
+  ];
+
+  // Student menu strictly tailored for Students
+  const studentMenuItems = [
+    { label: "الرئيسية", href: "/student", icon: LayoutDashboard },
+    { isDivider: true },
+    { label: "مقرراتي الدراسية", href: "/student/courses", icon: BookOpen },
+    { label: "واجباتي وتكليفاتي", href: "/student/assignments", icon: ClipboardList },
+    { label: "الاختبارات الإلكترونية", href: "/student/quizzes", icon: HelpCircle },
+    { label: "سجل الحضور والغياب", href: "/student/attendance", icon: CalendarDays },
+    { label: "النتائج والدرجات", href: "/student/grades", icon: Percent },
+    {
+      label: "البطاقة المدرسية الذكية",
       href: "/id-card",
       icon: CreditCard,
       badge: "جديد",
     },
-    { label: "بيانات التواصل", href: "/contact-info", icon: MessageSquare },
+    { label: "لوحة الشرف والمتفوقين", href: "/leaderboard", icon: Trophy },
+    { label: "الرسائل مع المعلمين", href: "/messages", icon: MessageSquare },
     { isDivider: true },
-    { label: "كشف التحضير والغياب", href: getAttendanceLink(), icon: CalendarDays },
-    { label: "الاختبارات الإلكترونية", href: getQuizzesLink(), icon: HelpCircle, badge: "جديد" },
-    {
-      label: "مقرراتي",
-      href: user.role === "TEACHER" ? "/teacher/courses" : "/student/courses",
-      icon: BookOpen,
-      badge: "جديد",
-    },
-    { label: "النتائج والدرجات", href: getResultsLink(), icon: Percent },
-    ...(user.role === "ADMIN"
-      ? [{ label: "التقارير والمؤشرات", href: "/admin/reports", icon: BarChart3 }]
-      : []),
-    { isDivider: true },
+    { label: "ملفي الشخصي", href: "/profile", icon: User },
     { label: "الإعدادات", href: "/settings", icon: Settings },
   ];
+
+  // Select items based on user role
+  const menuItems =
+    user.role === "ADMIN"
+      ? adminMenuItems
+      : user.role === "TEACHER"
+      ? teacherMenuItems
+      : studentMenuItems;
 
   if (!isOpen) return null;
 
@@ -89,19 +176,41 @@ export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
         onClick={onClose}
       />
 
-      {/* Drawer (starts from right in RTL) */}
+      {/* Drawer */}
       <aside className="fixed top-0 right-0 bottom-0 w-80 max-w-[85vw] bg-surface z-50 flex flex-col shadow-2xl border-l border-border animate-in slide-in-from-right duration-300">
         {/* Header */}
         <div className="p-5 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-blue to-brand-cyan flex items-center justify-center text-background font-bold">
-              <GraduationCap className="w-6 h-6" />
+            <div
+              className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-background shadow-glow",
+                user.role === "ADMIN"
+                  ? "bg-gradient-to-tr from-amber-500 to-status-warning text-black"
+                  : user.role === "TEACHER"
+                  ? "bg-gradient-to-tr from-brand-teal to-emerald-400"
+                  : "bg-gradient-to-tr from-brand-blue to-brand-cyan"
+              )}
+            >
+              {user.role === "ADMIN" ? (
+                <Shield className="w-6 h-6" />
+              ) : (
+                <GraduationCap className="w-6 h-6" />
+              )}
             </div>
             <div>
-              <h3 className="font-bold text-foreground text-base leading-tight">
-                منصة مدرستي
+              <h3 className="font-black text-foreground text-base leading-tight">
+                ثانوية مدرستي
               </h3>
-              <p className="text-xs text-brand-cyan">{user.full_name}</p>
+              <p className="text-xs font-semibold text-brand-cyan">
+                {user.full_name}
+              </p>
+              <span className="text-[10px] text-muted block mt-0.5">
+                {user.role === "ADMIN"
+                  ? "مدير المدرسة • صلاحية كاملة"
+                  : user.role === "TEACHER"
+                  ? "معلم معتمد • الكادر التعليمي"
+                  : "طالب نظامي"}
+              </span>
             </div>
           </div>
           <button
@@ -113,7 +222,7 @@ export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
           </button>
         </div>
 
-        {/* Menu list */}
+        {/* Menu Items List */}
         <div className="flex-1 overflow-y-auto py-3 px-3 space-y-1">
           {menuItems.map((item, idx) => {
             if (item.isDivider) {
@@ -134,14 +243,21 @@ export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
                 href={item.href || "#"}
                 onClick={onClose}
                 className={cn(
-                  "flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors",
+                  "flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors",
                   isActive
-                    ? "bg-brand-cyan/15 text-brand-cyan font-bold"
+                    ? "bg-brand-cyan/15 text-brand-cyan font-bold border border-brand-cyan/20"
                     : "text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-surface-secondary"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-surface-secondary/70 flex items-center justify-center text-brand-cyan">
+                  <div
+                    className={cn(
+                      "w-7 h-7 rounded-lg flex items-center justify-center transition-colors",
+                      isActive
+                        ? "bg-brand-cyan text-background"
+                        : "bg-surface-secondary/70 text-brand-cyan"
+                    )}
+                  >
                     <Icon className="w-4 h-4" />
                   </div>
                   <span>{item.label}</span>
@@ -155,12 +271,16 @@ export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
           })}
         </div>
 
-        {/* Footer with Logout */}
-        <div className="p-4 border-t border-border">
+        {/* Developer Credit & Logout */}
+        <div className="p-3 border-t border-border space-y-2 bg-surface-secondary/30">
+          <div className="text-[10px] text-center text-muted border-b border-border/40 pb-2">
+            تطوير: <strong className="text-foreground">م. بلال الشميري</strong> (783085075)
+          </div>
+
           <Link
             href="/login"
             onClick={onClose}
-            className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-surface-secondary text-status-danger hover:bg-status-danger/10 text-sm font-semibold transition-colors"
+            className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-xl bg-surface-secondary text-status-danger hover:bg-status-danger/10 text-xs font-bold transition-colors"
           >
             <LogOut className="w-4 h-4" />
             <span>تسجيل الخروج</span>

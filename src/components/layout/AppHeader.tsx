@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Profile, UserRole } from "@/types/database.types";
 import { setSessionRole, clearSession } from "@/lib/auth-actions";
+import { getSchoolInfo } from "@/lib/school-store";
 
 interface AppHeaderProps {
   user: Profile;
@@ -24,6 +25,21 @@ interface AppHeaderProps {
 export function AppHeader({ user, onOpenSidebar }: AppHeaderProps) {
   const router = useRouter();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [schoolName, setSchoolName] = useState("منصة مدرستي");
+  const [termLabel, setTermLabel] = useState("الفصل الدراسي الأول");
+
+  React.useEffect(() => {
+    const info = getSchoolInfo();
+    setSchoolName(info.school_name);
+    setTermLabel(info.current_term);
+
+    const handleUpdate = (e: any) => {
+      if (e.detail?.school_name) setSchoolName(e.detail.school_name);
+      if (e.detail?.current_term) setTermLabel(e.detail.current_term);
+    };
+    window.addEventListener("madrasti_school_updated", handleUpdate);
+    return () => window.removeEventListener("madrasti_school_updated", handleUpdate);
+  }, []);
 
   const handleRoleSwitch = async (role: UserRole) => {
     // Only admins are permitted to switch views for auditing/preview
@@ -72,11 +88,11 @@ export function AppHeader({ user, onOpenSidebar }: AppHeaderProps) {
               <GraduationCap className="w-6 h-6" />
             </div>
             <div>
-              <span className="font-extrabold text-lg tracking-wide text-foreground block leading-tight">
-                مدرستي
+              <span className="font-extrabold text-base sm:text-lg tracking-wide text-foreground block leading-tight max-w-[180px] sm:max-w-xs truncate">
+                {schoolName}
               </span>
               <span className="text-[11px] text-muted block leading-none">
-                LMS الثانوية
+                بوابة التعلّم الإلكتروني
               </span>
             </div>
           </Link>
@@ -85,7 +101,7 @@ export function AppHeader({ user, onOpenSidebar }: AppHeaderProps) {
         {/* Center: Semester info pill */}
         <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-xs text-muted">
           <span className="w-2 h-2 rounded-full bg-brand-cyan animate-pulse"></span>
-          <span>الفصل الدراسي الأول • 20261</span>
+          <span>{termLabel} • 2026</span>
         </div>
 
         {/* Left side: Notifications & User profile dropdown */}

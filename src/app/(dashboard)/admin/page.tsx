@@ -26,6 +26,7 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS, MOCK_SCHOOL_SETTINGS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
+import { getSchoolInfo } from "@/lib/school-store";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -33,6 +34,7 @@ export default function AdminDashboardPage() {
   const [currentRole, setCurrentRole] = useState<string>("ADMIN");
   const [isAuthorized, setIsAuthorized] = useState<boolean>(true);
   const [admin, setAdmin] = useState(MOCK_USERS.admin);
+  const [schoolName, setSchoolName] = useState(MOCK_SCHOOL_SETTINGS.school_name);
 
   useEffect(() => {
     // Check session role from cookies
@@ -44,6 +46,8 @@ export default function AdminDashboardPage() {
     } else {
       const active = getActiveUser("ADMIN");
       if (active.role === "ADMIN") setAdmin(active);
+      const info = getSchoolInfo();
+      setSchoolName(info.school_name);
     }
   }, []);
 
@@ -92,7 +96,7 @@ export default function AdminDashboardPage() {
                   الإدارة العامة للمدرسة
                 </span>
                 <span className="text-xs text-muted">
-                  {MOCK_SCHOOL_SETTINGS.school_name}
+                  {schoolName}
                 </span>
               </div>
               <h1 className="text-xl sm:text-2xl font-black text-foreground">

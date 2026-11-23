@@ -17,6 +17,7 @@ import {
 import { setSessionRole } from "@/lib/auth-actions";
 import { UserRole } from "@/types/database.types";
 import { authenticateUser, getStoredUsers, setActiveUser } from "@/lib/user-store";
+import { getSchoolInfo } from "@/lib/school-store";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 
 export default function LoginPage() {
@@ -26,6 +27,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [schoolTitle, setSchoolTitle] = useState("ثانوية مدرستي النموذجية");
+
+  React.useEffect(() => {
+    const info = getSchoolInfo();
+    setSchoolTitle(info.school_name);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +105,7 @@ export default function LoginPage() {
           منصة مدرستي
         </h2>
         <p className="mt-2 text-center text-sm text-muted">
-          بوابة التعلّم الإلكتروني — ثانوية مدرستي النموذجية
+          بوابة التعلّم الإلكتروني — {schoolTitle}
         </p>
       </div>
 

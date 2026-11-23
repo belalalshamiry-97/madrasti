@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { Profile } from "@/types/database.types";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { getSchoolInfo } from "@/lib/school-store";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -39,6 +40,18 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
   const pathname = usePathname();
+  const [schoolTitle, setSchoolTitle] = React.useState("ثانوية مدرستي");
+
+  React.useEffect(() => {
+    const info = getSchoolInfo();
+    setSchoolTitle(info.school_name);
+
+    const handleUpdate = (e: any) => {
+      if (e.detail?.school_name) setSchoolTitle(e.detail.school_name);
+    };
+    window.addEventListener("madrasti_school_updated", handleUpdate);
+    return () => window.removeEventListener("madrasti_school_updated", handleUpdate);
+  }, []);
 
   // Admin menu strictly tailored for School Principal (NO student items)
   const adminMenuItems = [
@@ -198,8 +211,8 @@ export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
               )}
             </div>
             <div>
-              <h3 className="font-black text-foreground text-base leading-tight">
-                ثانوية مدرستي
+              <h3 className="font-black text-foreground text-base leading-tight truncate max-w-[180px]">
+                {schoolTitle}
               </h3>
               <p className="text-xs font-semibold text-brand-cyan">
                 {user.full_name}

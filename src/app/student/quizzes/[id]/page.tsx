@@ -20,28 +20,54 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_QUIZZES, MOCK_QUIZ_QUESTIONS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import { getQuizDetailsFromDB, submitQuizAttemptInDB } from "@/lib/services/quizzes-service";
 import { QuizQuestion } from "@/types/database.types";
 import { cn } from "@/lib/utils";
 
 export default function StudentQuizTakingPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const student = MOCK_USERS.student1;
+  const [student, setStudent] = useState(MOCK_USERS.student1);
   const params = useParams();
   const quizId = params?.id as string;
 
-  const quiz = MOCK_QUIZZES.find((q) => q.id === quizId) || MOCK_QUIZZES[0];
-  const questions = MOCK_QUIZ_QUESTIONS;
+  const [quiz, setQuiz] = useState<any>(
+    MOCK_QUIZZES.find((q) => q.id === quizId) || MOCK_QUIZZES[0]
+  );
+  const [questions, setQuestions] = useState<any[]>(MOCK_QUIZ_QUESTIONS);
 
   // Quiz state: "intro" | "taking" | "submitted"
   const [quizState, setQuizState] = useState<"intro" | "taking" | "submitted">("intro");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [secondsRemaining, setSecondsRemaining] = useState(quiz.duration_minutes * 60);
+  const [secondsRemaining, setSecondsRemaining] = useState(15 * 60);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isSubmittingAttempt, setIsSubmittingAttempt] = useState(false);
 
   // Result state
   const [score, setScore] = useState(0);
+
+  useEffect(() => {
+    const active = getActiveUser("STUDENT");
+    setStudent(active);
+
+    async function loadData() {
+      try {
+        const dbQuiz = await getQuizDetailsFromDB(quizId);
+        if (dbQuiz) {
+          setQuiz(dbQuiz);
+          if (dbQuiz.questions && dbQuiz.questions.length > 0) {
+            setQuestions(dbQuiz.questions);
+          }
+          setSecondsRemaining((dbQuiz.duration_minutes || 15) * 60);
+        }
+      } catch (err) {
+        console.error("Error loading quiz details from DB:", err);
+      }
+    }
+    loadData();
+  }, [quizId]);
 
   // Timer countdown
   useEffect(() => {
@@ -74,21 +100,39 @@ export default function StudentQuizTakingPage() {
     }));
   };
 
-  const handleSubmitQuiz = () => {
-    // Calculate score
-    let calculatedScore = 0;
-    questions.forEach((q) => {
-      if (answers[q.id] === q.correct_answer) {
-        calculatedScore += q.points;
+  const handleSubmitQuiz = async () => {
+    setIsSubmittingAttempt(true);
+    try {
+      const res = await submitQuizAttemptInDB(quiz.id, student.id || student.username, answers);
+      if (res && res.success) {
+        setScore(res.score);
+      } else {
+        // Fallback local calculation
+        let calculatedScore = 0;
+        questions.forEach((q) => {
+          if (answers[q.id] === q.correct_answer) {
+            calculatedScore += q.points;
+          }
+        });
+        setScore(calculatedScore);
       }
-    });
-
-    setScore(calculatedScore);
-    setIsConfirmModalOpen(false);
-    setQuizState("submitted");
+    } catch (err) {
+      console.error("Failed submitting quiz to DB:", err);
+      let calculatedScore = 0;
+      questions.forEach((q) => {
+        if (answers[q.id] === q.correct_answer) {
+          calculatedScore += q.points;
+        }
+      });
+      setScore(calculatedScore);
+    } finally {
+      setIsSubmittingAttempt(false);
+      setIsConfirmModalOpen(false);
+      setQuizState("submitted");
+    }
   };
 
-  const currentQ = questions[currentIndex];
+  const currentQ = questions[currentIndex] || questions[0];
   const answeredCount = Object.keys(answers).length;
   const isTimeCritical = secondsRemaining < 120; // less than 2 mins
 
@@ -227,7 +271,7 @@ export default function StudentQuizTakingPage() {
 
               {/* Options */}
               <div className="space-y-3 pt-2">
-                {currentQ.options.map((opt) => {
+                {currentQ.options.map((opt: any) => {
                   const isSelected = answers[currentQ.id] === opt.id;
                   return (
                     <div
@@ -350,11 +394,11 @@ export default function StudentQuizTakingPage() {
                 مراجعة الإجابات النموذجية والتوضيحات:
               </h3>
 
-              {questions.map((q, idx) => {
+              {questions.map((q: any, idx: number) => {
                 const studentAns = answers[q.id];
                 const isCorrect = studentAns === q.correct_answer;
-                const correctOpt = q.options.find((o) => o.id === q.correct_answer);
-                const selectedOpt = q.options.find((o) => o.id === studentAns);
+                const correctOpt = q.options?.find((o: any) => o.id === q.correct_answer);
+                const selectedOpt = q.options?.find((o: any) => o.id === studentAns);
 
                 return (
                   <div

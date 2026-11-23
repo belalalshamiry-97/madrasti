@@ -16,8 +16,10 @@ import {
 } from "lucide-react";
 import { setSessionRole } from "@/lib/auth-actions";
 import { UserRole } from "@/types/database.types";
-import { authenticateUser, getStoredUsers, setActiveUser } from "@/lib/user-store";
+import { setActiveUser } from "@/lib/user-store";
 import { getSchoolInfo } from "@/lib/school-store";
+import { createClient } from "@/lib/supabase/client";
+import { loginWithSupabase } from "@/lib/services/auth-service";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 
 export default function LoginPage() {
@@ -30,8 +32,22 @@ export default function LoginPage() {
   const [schoolTitle, setSchoolTitle] = useState("ثانوية مدرستي النموذجية");
 
   React.useEffect(() => {
-    const info = getSchoolInfo();
-    setSchoolTitle(info.school_name);
+    async function loadSchoolSettings() {
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.from("school_settings").select("school_name").limit(1).maybeSingle();
+        if (data?.school_name) {
+          setSchoolTitle(data.school_name);
+        } else {
+          const info = getSchoolInfo();
+          setSchoolTitle(info.school_name);
+        }
+      } catch {
+        const info = getSchoolInfo();
+        setSchoolTitle(info.school_name);
+      }
+    }
+    loadSchoolSettings();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -41,7 +57,7 @@ export default function LoginPage() {
 
     try {
       const cleanUser = username.trim();
-      const authResult = authenticateUser(cleanUser, password);
+      const authResult = await loginWithSupabase(cleanUser, password);
 
       if (!authResult.success || !authResult.user) {
         setError(authResult.error || "بيانات الدخول غير صحيحة.");
@@ -50,10 +66,16 @@ export default function LoginPage() {
       }
 
       const user = authResult.user;
-      setActiveUser(user);
-
-      // Set cookies for role and user
-      await setSessionRole(user.role, user.username, user.full_name);
+      setActiveUser({
+        id: user.id,
+        full_name: user.full_name,
+        username: user.username,
+        role: user.role,
+        phone: user.phone || "",
+        permissions: [],
+        status: user.is_active ? "active" : "suspended",
+        password: "",
+      });
 
       // Route strictly based on user's actual database role
       if (user.role === "ADMIN") {
@@ -72,21 +94,8 @@ export default function LoginPage() {
   };
 
   const handleQuickDemo = async (role: "ADMIN" | "TEACHER" | "STUDENT", demoUsername: string) => {
-    setLoading(true);
-    const users = getStoredUsers();
-    const targetUser = users.find((u) => u.username.toLowerCase() === demoUsername.toLowerCase());
-
-    if (targetUser) {
-      setActiveUser(targetUser);
-      await setSessionRole(targetUser.role, targetUser.username, targetUser.full_name);
-    } else {
-      await setSessionRole(role);
-    }
-
-    if (role === "ADMIN") router.push("/admin");
-    else if (role === "TEACHER") router.push("/teacher");
-    else router.push("/student");
-    router.refresh();
+    setUsername(demoUsername);
+    setPassword("123");
   };
 
   return (
@@ -183,7 +192,7 @@ export default function LoginPage() {
                 href="#help"
                 onClick={(e) => {
                   e.preventDefault();
-                  alert("يرجى مراجعة إدارة المدرسة للحصول على بيانات الدخول أو إعادة تعيين كلمة المرور.");
+                  setError("ملاحظة: لاستعادة أو إعادة تعيين كلمة المرور، يرجى التواصل مع إدارة المدرسة.");
                 }}
                 className="text-brand-cyan hover:underline font-medium"
               >

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -23,15 +23,56 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_ATTENDANCE_STUDENTS } from "@/lib/mock-data";
 import { AttendanceRecord } from "@/types/database.types";
 import { cn } from "@/lib/utils";
+import { getActiveUser } from "@/lib/user-store";
+import { getClassSubjectsFromDB } from "@/lib/services/academic-service";
+import {
+  recordAttendanceInDB,
+  getAttendanceForDateFromDB,
+} from "@/lib/services/attendance-service";
 
 export default function TeacherAttendancePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const teacher = MOCK_USERS.teacher1;
+  const [teacher, setTeacher] = useState(MOCK_USERS.teacher1);
 
-  const [selectedDate, setSelectedDate] = useState("2026-11-22");
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
   const [records, setRecords] = useState<AttendanceRecord[]>(MOCK_ATTENDANCE_STUDENTS);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [classSubjectId, setClassSubjectId] = useState<string>("");
+
+  useEffect(() => {
+    const active = getActiveUser("TEACHER");
+    setTeacher(active);
+
+    async function loadData() {
+      try {
+        const classes = await getClassSubjectsFromDB();
+        if (classes.length > 0) {
+          setClassSubjectId(classes[0].id);
+        }
+        const dbRecords = await getAttendanceForDateFromDB(selectedDate);
+        if (dbRecords && dbRecords.length > 0) {
+          setRecords(
+            dbRecords.map((r: any) => ({
+              id: r.id,
+              student_id: r.studentId,
+              student_name: r.studentName,
+              student_number: r.username,
+              section_id: r.classSubjectId || "sec-1",
+              attendance_date: selectedDate,
+              status: r.status,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load attendance from DB:", err);
+      }
+    }
+    loadData();
+  }, [selectedDate]);
 
   const handleStatusChange = (
     studentId: string,
@@ -61,9 +102,25 @@ export default function TeacherAttendancePage() {
     r.student_number.includes(searchQuery)
   );
 
-  const handleSaveAttendance = () => {
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2500);
+  const handleSaveAttendance = async () => {
+    setIsSaving(true);
+    try {
+      const payload = records.map((r) => ({
+        student_id: r.student_id,
+        class_subject_id: classSubjectId || "80000000-0000-0000-0000-000000000001",
+        attendance_date: selectedDate,
+        status: r.status as "present" | "absent" | "late" | "excused",
+        recorded_by: teacher.id || teacher.username,
+      }));
+
+      await recordAttendanceInDB(payload);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2500);
+    } catch (err) {
+      console.error("Failed saving attendance:", err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (

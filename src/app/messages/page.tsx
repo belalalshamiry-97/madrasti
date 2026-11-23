@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -25,19 +25,19 @@ import {
   MockMessage,
   MockConversation,
 } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import {
+  getMessagesForConversationFromDB,
+  sendMessageInDB,
+} from "@/lib/services/communications-service";
 
 export default function MessagesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  // Check current role from cookie or default to student
   const [currentUser, setCurrentUser] = useState(MOCK_USERS.student1);
 
-  React.useEffect(() => {
-    const match = document.cookie.match(new RegExp("(^| )madrasti_session_role=([^;]+)"));
-    const role = match ? match[2] : "STUDENT";
-    if (role === "TEACHER") setCurrentUser(MOCK_USERS.teacher1);
-    else if (role === "ADMIN") setCurrentUser(MOCK_USERS.admin);
-    else setCurrentUser(MOCK_USERS.student1);
+  useEffect(() => {
+    const active = getActiveUser();
+    setCurrentUser(active);
   }, []);
 
   const [conversations, setConversations] = useState<MockConversation[]>(
@@ -52,7 +52,23 @@ export default function MessagesPage() {
   const activeConv =
     conversations.find((c) => c.id === activeConvId) || conversations[0];
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  useEffect(() => {
+    async function loadConvMessages() {
+      if (activeConvId && activeConvId.includes("-") && activeConvId.length > 20) {
+        try {
+          const dbMsgs = await getMessagesForConversationFromDB(activeConvId);
+          if (dbMsgs && dbMsgs.length > 0) {
+            setMessages(dbMsgs as any);
+          }
+        } catch (err) {
+          console.error("Failed to load messages from DB:", err);
+        }
+      }
+    }
+    loadConvMessages();
+  }, [activeConvId]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = newMessageText.trim();
     if (!text) return;
@@ -70,11 +86,22 @@ export default function MessagesPage() {
       is_read: true,
     };
 
-    setTimeout(() => {
-      setMessages((prev) => [...prev, newMsg]);
-      setNewMessageText("");
-      setIsSending(false);
-    }, 300);
+    setMessages((prev) => [...prev, newMsg]);
+    setNewMessageText("");
+
+    if (activeConv.id && activeConv.id.includes("-") && activeConv.id.length > 20) {
+      try {
+        await sendMessageInDB({
+          conversation_id: activeConv.id,
+          sender_id: currentUser.id || currentUser.username,
+          body: text,
+        });
+      } catch (err) {
+        console.error("Failed sending message to DB:", err);
+      }
+    }
+
+    setIsSending(false);
   };
 
   const handleReportMessage = (msgId: string) => {

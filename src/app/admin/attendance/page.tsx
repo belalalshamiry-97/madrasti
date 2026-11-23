@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -25,6 +25,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
+import { getAttendanceForDateFromDB } from "@/lib/services/attendance-service";
 
 interface AttendanceRecord {
   id: string;
@@ -267,6 +268,39 @@ export default function AdminAttendancePage() {
 
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
 
+  useEffect(() => {
+    async function loadData() {
+      if (selectedDate !== "ALL") {
+        try {
+          const dbRecords = await getAttendanceForDateFromDB(selectedDate);
+          if (dbRecords && dbRecords.length > 0) {
+            setRecords((prev) => {
+              const otherDates = prev.filter((r) => r.date !== selectedDate);
+              const mapped = dbRecords.map((r: any) => ({
+                id: r.id,
+                studentId: r.studentId,
+                studentName: r.studentName,
+                username: r.username,
+                grade: r.grade,
+                section: r.section,
+                date: r.date,
+                dayName: "اليوم",
+                period: "الحصة الأولى",
+                subject: r.subject,
+                teacherName: r.teacherName,
+                status: r.status,
+                note: r.note,
+              }));
+              return [...mapped, ...otherDates];
+            });
+          }
+        } catch (err) {
+          console.error("Failed to load attendance records:", err);
+        }
+      }
+    }
+    loadData();
+  }, [selectedDate]);
   const filteredRecords = useMemo(() => {
     return records
       .filter((r) => {

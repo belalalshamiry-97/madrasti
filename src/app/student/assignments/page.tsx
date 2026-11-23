@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronRight, FileCheck, Clock, Calendar, AlertCircle } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -9,32 +9,43 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { MOCK_USERS, MOCK_ASSIGNMENTS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
-import { getSubjectsForGrade } from "@/lib/academic-store";
+import { getAssignmentsForStudentFromDB } from "@/lib/services/assignments-service";
 
 export default function StudentAssignmentsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "late" | "pending">("all");
   const [student, setStudent] = useState(MOCK_USERS.student1);
-  const [gradeSubjectNames, setGradeSubjectNames] = useState<string[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const active = getActiveUser("STUDENT");
     setStudent(active);
 
-    const grade = active.grade || "الثالث الثانوي";
-    const subjects = getSubjectsForGrade(grade);
-    setGradeSubjectNames(subjects.map((s) => s.name.trim().toLowerCase()));
+    async function loadData() {
+      setIsLoading(true);
+      try {
+        const dbAssignments = await getAssignmentsForStudentFromDB(active.id || active.username);
+        if (dbAssignments && dbAssignments.length > 0) {
+          setAssignments(dbAssignments);
+        } else {
+          setAssignments(MOCK_ASSIGNMENTS);
+        }
+      } catch (err) {
+        console.error("Failed to load student assignments:", err);
+        setAssignments(MOCK_ASSIGNMENTS);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
   }, []);
 
-  const filteredAssignments = MOCK_ASSIGNMENTS.filter((a) => {
-    const matchesFilter = filter === "all" || a.status === filter;
-    if (gradeSubjectNames.length === 0) return matchesFilter;
-
-    const aCourse = a.course_name.trim().toLowerCase();
-    const matchesGrade = gradeSubjectNames.some(
-      (sName) => sName.includes(aCourse) || aCourse.includes(sName)
-    );
-    return matchesFilter && matchesGrade;
+  const filteredAssignments = assignments.filter((a) => {
+    if (filter === "all") return true;
+    if (filter === "late") return a.status === "late";
+    if (filter === "pending") return a.status === "pending" || a.status === "submitted";
+    return true;
   });
 
   return (
@@ -73,7 +84,7 @@ export default function StudentAssignmentsPage() {
                 : "bg-surface text-muted hover:text-foreground border border-border"
             }`}
           >
-            جميع التكاليف ({MOCK_ASSIGNMENTS.length})
+            جميع التكاليف ({assignments.length})
           </button>
           <button
             onClick={() => setFilter("late")}
@@ -83,7 +94,7 @@ export default function StudentAssignmentsPage() {
                 : "bg-surface text-muted hover:text-foreground border border-border"
             }`}
           >
-            المتأخرة (1)
+            المتأخرة ({assignments.filter((a) => a.status === "late").length})
           </button>
           <button
             onClick={() => setFilter("pending")}
@@ -93,15 +104,28 @@ export default function StudentAssignmentsPage() {
                 : "bg-surface text-muted hover:text-foreground border border-border"
             }`}
           >
-            قيد التسليم (1)
+            قيد التسليم ({assignments.filter((a) => a.status === "pending" || a.status === "submitted").length})
           </button>
         </div>
 
         {/* Assignments List */}
         <div className="space-y-4">
-          {filteredAssignments.map((assignment) => (
-            <div
-              key={assignment.id}
+          {filteredAssignments.length === 0 ? (
+            <div className="p-12 text-center rounded-3xl bg-surface border border-border space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-brand-cyan/15 text-brand-cyan flex items-center justify-center mx-auto">
+                <FileCheck className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-foreground">
+                لا توجد تكاليف مطابقة
+              </h3>
+              <p className="text-xs text-muted max-w-sm mx-auto">
+                كافة التكاليف والواجبات المطلوبة ستظهر هنا فور نشرها من قبل المعلمين في مقرراتك الدراسية.
+              </p>
+            </div>
+          ) : (
+            filteredAssignments.map((assignment) => (
+              <div
+                key={assignment.id}
               className="p-5 rounded-3xl bg-surface border border-border hover:border-brand-cyan/40 shadow-card space-y-4 transition-all"
             >
               <div className="flex items-start justify-between gap-3">
@@ -142,7 +166,8 @@ export default function StudentAssignmentsPage() {
                 </Link>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
       </main>
 

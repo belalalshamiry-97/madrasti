@@ -19,6 +19,7 @@ import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
 import { getStoredSubjects, SubjectAssignment } from "@/lib/academic-store";
+import { getTeacherCoursesFromDB } from "@/lib/services/academic-service";
 
 export default function TeacherCoursesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -29,23 +30,47 @@ export default function TeacherCoursesPage() {
     const active = getActiveUser("TEACHER");
     setCurrentTeacher(active);
 
-    const all = getStoredSubjects();
-    const assigned = all.filter(
-      (s) =>
-        s.teacherName.toLowerCase().includes(active.full_name.toLowerCase()) ||
-        active.full_name.toLowerCase().includes(s.teacherName.toLowerCase())
-    );
+    async function loadCourses() {
+      try {
+        const dbCourses = await getTeacherCoursesFromDB(active.id || active.username);
+        if (dbCourses && dbCourses.length > 0) {
+          setAssignedCourses(
+            dbCourses.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              code: c.code,
+              type: c.subject_type === "practical" ? "practical" : "theory",
+              grade: c.grade,
+              section: c.section,
+              teacherName: active.full_name,
+            }))
+          );
+          return;
+        }
+      } catch (err) {
+        console.warn("Falling back to local teacher courses:", err);
+      }
 
-    if (assigned.length > 0) {
-      setAssignedCourses(assigned);
-    } else {
-      // Fallback for default teachers
-      if (active.username === "teacher1" || active.full_name.includes("بلال")) {
-        setAssignedCourses(all.filter((s) => s.teacherName.includes("بلال")));
-      } else if (active.username === "teacher2" || active.full_name.includes("فاطمة")) {
-        setAssignedCourses(all.filter((s) => s.teacherName.includes("فاطمة")));
+      // Fallback
+      const all = getStoredSubjects();
+      const assigned = all.filter(
+        (s) =>
+          s.teacherName.toLowerCase().includes(active.full_name.toLowerCase()) ||
+          active.full_name.toLowerCase().includes(s.teacherName.toLowerCase())
+      );
+
+      if (assigned.length > 0) {
+        setAssignedCourses(assigned);
+      } else {
+        if (active.username === "teacher1" || active.full_name.includes("بلال")) {
+          setAssignedCourses(all.filter((s) => s.teacherName.includes("بلال")));
+        } else if (active.username === "teacher2" || active.full_name.includes("فاطمة")) {
+          setAssignedCourses(all.filter((s) => s.teacherName.includes("فاطمة")));
+        }
       }
     }
+
+    loadCourses();
   }, []);
 
   return (
@@ -119,7 +144,7 @@ export default function TeacherCoursesPage() {
 
                 <div className="pt-2 border-t border-border/60 flex items-center justify-between">
                   <Link
-                    href={`/teacher/courses/80000000-0000-0000-0000-000000000001/lessons`}
+                    href={`/teacher/courses/${course.id}/lessons`}
                     className="px-3.5 py-2 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-xs font-semibold text-foreground flex items-center gap-1.5 transition-colors"
                   >
                     <FileText className="w-3.5 h-3.5 text-brand-cyan" />
@@ -127,7 +152,7 @@ export default function TeacherCoursesPage() {
                   </Link>
 
                   <Link
-                    href={`/teacher/courses/80000000-0000-0000-0000-000000000001/lessons/new`}
+                    href={`/teacher/courses/${course.id}/lessons/new`}
                     className="px-4 py-2 rounded-xl bg-brand-teal text-background text-xs font-bold flex items-center gap-1.5 shadow-glow hover:brightness-110 transition-all"
                   >
                     <PlusCircle className="w-4 h-4" />

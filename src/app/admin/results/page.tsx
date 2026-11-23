@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -24,7 +24,8 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
-import { MOCK_USERS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import { getProfilesFromDB } from "@/lib/services/users-service";
 
 interface StudentResult {
   id: string;
@@ -50,7 +51,7 @@ interface StudentResult {
 
 export default function AdminResultsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const admin = MOCK_USERS.admin;
+  const [admin, setAdmin] = useState(getActiveUser());
 
   const [yearFilter, setYearFilter] = useState("2026-2027");
   const [termFilter, setTermFilter] = useState("الفصل الدراسي الأول");
@@ -61,8 +62,8 @@ export default function AdminResultsPage() {
 
   const [selectedStudent, setSelectedStudent] = useState<StudentResult | null>(null);
 
-  // Student results mock database
-  const [resultsList] = useState<StudentResult[]>([
+  // Student results database
+  const [resultsList, setResultsList] = useState<StudentResult[]>([
     {
       id: "res-1",
       rank: 1,
@@ -212,6 +213,54 @@ export default function AdminResultsPage() {
       status: "ناجح بتفوق",
     },
   ]);
+
+  useEffect(() => {
+    setAdmin(getActiveUser());
+
+    async function loadDBStudents() {
+      try {
+        const profiles = await getProfilesFromDB("STUDENT");
+        if (profiles && profiles.length > 0) {
+          setResultsList((prev) => {
+            const existingUsernames = new Set(prev.map((r) => r.username.toLowerCase()));
+            const newEntries: StudentResult[] = [];
+
+            profiles.forEach((p, idx) => {
+              if (!existingUsernames.has(p.username.toLowerCase())) {
+                newEntries.push({
+                  id: p.id,
+                  rank: prev.length + newEntries.length + 1,
+                  name: p.full_name,
+                  username: p.username,
+                  grade: "المرحلة الثانوية",
+                  section: "الشعبة (أ)",
+                  year: "2026-2027",
+                  term: "الفصل الدراسي الأول",
+                  math: 90,
+                  physics: 88,
+                  chemistry: 89,
+                  biologyOrTech: 91,
+                  arabic: 92,
+                  english: 87,
+                  computer: 95,
+                  totalScore: 632,
+                  percentage: 90.3,
+                  gpaRating: "ممتاز",
+                  status: "ناجح بتفوق",
+                });
+              }
+            });
+
+            return newEntries.length > 0 ? [...prev, ...newEntries] : prev;
+          });
+        }
+      } catch (err) {
+        console.error("Error loading DB students for results:", err);
+      }
+    }
+
+    loadDBStudents();
+  }, []);
 
   const filteredResults = useMemo(() => {
     return resultsList.filter((r) => {

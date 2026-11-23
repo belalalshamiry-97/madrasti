@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   HelpCircle,
@@ -17,12 +17,39 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_QUIZZES } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import { getQuizzesForStudentFromDB } from "@/lib/services/quizzes-service";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { cn } from "@/lib/utils";
 
 export default function StudentQuizzesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const student = MOCK_USERS.student1;
+  const [student, setStudent] = useState(MOCK_USERS.student1);
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const active = getActiveUser("STUDENT");
+    setStudent(active);
+
+    async function loadData() {
+      setIsLoading(true);
+      try {
+        const dbQuizzes = await getQuizzesForStudentFromDB(active.id || active.username);
+        if (dbQuizzes && dbQuizzes.length > 0) {
+          setQuizzes(dbQuizzes);
+        } else {
+          setQuizzes(MOCK_QUIZZES);
+        }
+      } catch (err) {
+        console.error("Failed to load quizzes from DB:", err);
+        setQuizzes(MOCK_QUIZZES);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
@@ -55,7 +82,7 @@ export default function StudentQuizzesPage() {
 
         {/* Quizzes List */}
         <div className="space-y-4">
-          {MOCK_QUIZZES.map((quiz) => (
+          {quizzes.map((quiz) => (
             <div
               key={quiz.id}
               className="p-5 sm:p-6 rounded-3xl bg-surface border border-border hover:border-brand-cyan/40 shadow-card transition-all space-y-4"

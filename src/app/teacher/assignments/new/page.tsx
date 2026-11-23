@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,25 +22,27 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_COURSES, MOCK_LESSONS } from "@/lib/mock-data";
 import { validateFile, formatBytes } from "@/lib/storage";
+import { getActiveUser } from "@/lib/user-store";
+import { getClassSubjectsFromDB, ClassSubjectAssignment } from "@/lib/services/academic-service";
+import { createAssignmentInDB } from "@/lib/services/assignments-service";
 
 export default function TeacherNewAssignmentPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const teacher = MOCK_USERS.teacher1;
+  const [teacher, setTeacher] = useState(MOCK_USERS.teacher1);
+  const [availableClasses, setAvailableClasses] = useState<ClassSubjectAssignment[]>([]);
 
   // Form states
-  const [selectedCourseId, setSelectedCourseId] = useState(
-    MOCK_COURSES[0].id
-  );
-  const [selectedLessonId, setSelectedLessonId] = useState(
-    MOCK_LESSONS[1].id // DHCP
-  );
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedLessonId, setSelectedLessonId] = useState("");
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
   const [assignmentType, setAssignmentType] = useState<"assignment" | "activity">("assignment");
   const [maxScore, setMaxScore] = useState<number>(10);
-  const [openDate, setOpenDate] = useState("2026-11-22");
-  const [dueDate, setDueDate] = useState("2026-11-29T23:59");
+  const [openDate, setOpenDate] = useState(new Date().toISOString().slice(0, 10));
+  const [dueDate, setDueDate] = useState(
+    new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16)
+  );
   const [maxAttempts, setMaxAttempts] = useState<number>(1);
   const [allowLateSubmissions, setAllowLateSubmissions] = useState(true);
   const [allowResubmissions, setAllowResubmissions] = useState(true);
@@ -50,7 +52,22 @@ export default function TeacherNewAssignmentPage() {
   const [fileError, setFileError] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const active = getActiveUser("TEACHER");
+    setTeacher(active);
+
+    async function loadData() {
+      const classes = await getClassSubjectsFromDB();
+      setAvailableClasses(classes);
+      if (classes.length > 0) {
+        setSelectedCourseId(classes[0].id);
+      }
+    }
+    loadData();
+  }, []);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError(null);
@@ -70,21 +87,51 @@ export default function TeacherNewAssignmentPage() {
     setAttachments((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
     if (!title.trim() || !instructions.trim()) {
-      alert("يرجى ملء عنوان التكليف والتعليمات المطلوبة.");
+      setErrorMessage("يرجى ملء عنوان التكليف والتعليمات المطلوبة للطلاب.");
       return;
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSuccessMessage("تم إنشاء التكليف ونشره للطلاب بنجاح!");
+    try {
+      const res = await createAssignmentInDB({
+        class_subject_id: selectedCourseId,
+        lesson_id: selectedLessonId || undefined,
+        title: title.trim(),
+        instructions: instructions.trim(),
+        assignment_type: assignmentType,
+        max_score: maxScore,
+        open_date: openDate ? new Date(openDate).toISOString() : new Date().toISOString(),
+        due_date: dueDate ? new Date(dueDate).toISOString() : new Date(Date.now() + 7 * 86400000).toISOString(),
+        max_attempts: maxAttempts,
+        allow_late_submissions: allowLateSubmissions,
+        allow_resubmissions: allowResubmissions,
+        attachments: attachments.map((a) => ({
+          name: a.name,
+          file_path: `assignments/${a.name}`,
+          file_size_bytes: a.size,
+        })),
+      });
+
+      if (!res.success) {
+        setErrorMessage(res.error || "تعذر حفظ التكليف في قاعدة البيانات.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      setSuccessMessage("تم إنشاء التكليف ونشره في قاعدة البيانات للطلاب بنجاح!");
       setTimeout(() => {
         router.push("/teacher");
       }, 1500);
-    }, 600);
+    } catch (err: any) {
+      setErrorMessage(err.message || "حدث خطأ أثناء حفظ التكليف.");
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -127,6 +174,13 @@ export default function TeacherNewAssignmentPage() {
           </div>
         )}
 
+        {errorMessage && (
+          <div className="p-4 rounded-2xl bg-status-danger/15 border border-status-danger/30 text-status-danger text-sm flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* 1. Target Course & Lesson */}
           <div className="p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
@@ -144,11 +198,19 @@ export default function TeacherNewAssignmentPage() {
                   onChange={(e) => setSelectedCourseId(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground text-sm focus:outline-none focus:border-brand-teal"
                 >
-                  {MOCK_COURSES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.subject?.name} — شعبة (أ)
-                    </option>
-                  ))}
+                  {availableClasses.length > 0 ? (
+                    availableClasses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.subject_name} — {c.section_name} ({c.grade_name})
+                      </option>
+                    ))
+                  ) : (
+                    MOCK_COURSES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.subject?.name} — شعبة (أ)
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 

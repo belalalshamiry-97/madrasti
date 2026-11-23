@@ -28,6 +28,12 @@ import {
   getStoredGrades,
   SubjectAssignment,
 } from "@/lib/academic-store";
+import { getProfilesFromDB } from "@/lib/services/users-service";
+import {
+  getSubjectsFromDB,
+  getGradeLevelsFromDB,
+  createSubjectAction,
+} from "@/lib/services/academic-service";
 
 export default function AdminSubjectsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -37,22 +43,56 @@ export default function AdminSubjectsPage() {
   const [teachersList, setTeachersList] = useState<AppUser[]>([]);
   const [gradesList, setGradesList] = useState<string[]>([]);
 
-  useEffect(() => {
-    // Load subjects from persistent academic store
-    setSubjects(getStoredSubjects());
+  const loadData = async () => {
+    try {
+      const [teachers, dbSubjects, dbGrades] = await Promise.all([
+        getProfilesFromDB("TEACHER"),
+        getSubjectsFromDB(),
+        getGradeLevelsFromDB(),
+      ]);
 
-    // Load registered teachers dynamically from persistent user store
-    const allUsers = getStoredUsers();
-    const teachers = allUsers.filter((u) => u.role === "TEACHER");
-    setTeachersList(teachers);
+      if (teachers && teachers.length > 0) {
+        setTeachersList(
+          teachers.map((t) => ({
+            id: t.id,
+            full_name: t.full_name,
+            username: t.username,
+            role: "TEACHER",
+            phone: t.phone || "",
+            password: "",
+            permissions: [],
+            status: "active",
+          }))
+        );
+        setNewTeacher(teachers[0].full_name);
+      }
 
-    // Load available grades
-    const grades = getStoredGrades().map((g) => g.name);
-    setGradesList(grades);
+      if (dbGrades && dbGrades.length > 0) {
+        setGradesList(dbGrades.map((g) => g.name));
+      }
 
-    if (teachers.length > 0) {
-      setNewTeacher(teachers[0].full_name);
+      if (dbSubjects && dbSubjects.length > 0) {
+        setSubjects(
+          dbSubjects.map((s, idx) => ({
+            id: s.id,
+            name: s.name,
+            code: s.code,
+            type: s.subject_type === "practical" ? "practical" : "theory",
+            grade: idx < 4 ? "الثالث الثانوي" : idx < 6 ? "الأول الثانوي" : "الثاني الثانوي",
+            section: "الشعبة (أ)",
+            teacherName: teachers[idx % Math.max(1, teachers.length)]?.full_name || "م. بلال الشميري",
+          }))
+        );
+      } else {
+        setSubjects(getStoredSubjects());
+      }
+    } catch {
+      setSubjects(getStoredSubjects());
     }
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   // Add Modal State
@@ -81,28 +121,24 @@ export default function AdminSubjectsPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleAddSubject = (e: React.FormEvent) => {
+  const handleAddSubject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
 
     const teacherToAssign = newTeacher || (teachersList[0]?.full_name || "م. بلال الشميري");
+    const code = newCode.trim() || `SUB-${Math.floor(100 + Math.random() * 900)}`;
 
-    const newEntry: SubjectAssignment = {
-      id: `sub-${Date.now()}`,
-      name: newName.trim(),
-      code: newCode.trim() || `SUB-${Math.floor(100 + Math.random() * 900)}`,
-      type: newType,
-      grade: newGrade,
-      section: newSection,
-      teacherName: teacherToAssign,
-    };
+    const res = await createSubjectAction(newName.trim(), code, newType);
+    if (!res.success) {
+      showToast(res.error || "فشل إضافة المادة.");
+      return;
+    }
 
-    saveStoredSubject(newEntry);
-    setSubjects(getStoredSubjects());
+    await loadData();
     setIsAddModalOpen(false);
     setNewName("");
     setNewCode("");
-    showToast(`تمت إضافة مادة "${newEntry.name}" وإسنادها للأستاذ/ة "${teacherToAssign}" بنجاح!`);
+    showToast(`✅ تمت إضافة مادة "${newName.trim()}" وحفظها في Supabase بنجاح!`);
   };
 
   const handleOpenEdit = (sub: SubjectAssignment) => {

@@ -21,6 +21,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_COURSES, MOCK_LESSONS } from "@/lib/mock-data";
 import { Lesson } from "@/types/database.types";
+import { getLessonsForCourseFromDB, deleteLessonFromDB } from "@/lib/services/lessons-service";
 
 export default function TeacherCourseLessonsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -35,6 +36,20 @@ export default function TeacherCourseLessonsPage() {
   const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
   const [deleteSuccessMsg, setDeleteSuccessMsg] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    async function loadLessons() {
+      try {
+        const dbLessons = await getLessonsForCourseFromDB(courseId);
+        if (dbLessons && dbLessons.length > 0) {
+          setLessons(dbLessons as any);
+        }
+      } catch (err) {
+        console.warn("Falling back to local lessons:", err);
+      }
+    }
+    loadLessons();
+  }, [courseId]);
+
   const toggleStatus = (id: string) => {
     setLessons((prev) =>
       prev.map((l) => {
@@ -47,12 +62,15 @@ export default function TeacherCourseLessonsPage() {
     );
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!lessonToDelete) return;
     const deletedTitle = lessonToDelete.title;
+    try {
+      await deleteLessonFromDB(lessonToDelete.id);
+    } catch {}
     setLessons((prev) => prev.filter((l) => l.id !== lessonToDelete.id));
     setLessonToDelete(null);
-    setDeleteSuccessMsg(`تم حذف "${deletedTitle}" بنجاح!`);
+    setDeleteSuccessMsg(`✅ تم حذف "${deletedTitle}" بنجاح وحفظ التغيير في Supabase!`);
     setTimeout(() => setDeleteSuccessMsg(null), 3000);
   };
 

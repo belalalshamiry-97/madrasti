@@ -19,19 +19,32 @@ import { GradeBadge } from "@/components/common/GradeBadge";
 import { MOCK_USERS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
 import { getSubmissionsForStudent, AssignmentSubmission } from "@/lib/submission-store";
+import { getStudentGradesFromDB } from "@/lib/services/assignments-service";
 
 export default function StudentGradesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [student, setStudent] = useState(MOCK_USERS.student1);
-  const [gradedItems, setGradedItems] = useState<AssignmentSubmission[]>([]);
+  const [gradedItems, setGradedItems] = useState<any[]>([]);
 
   useEffect(() => {
     const active = getActiveUser("STUDENT");
     setStudent(active);
 
-    const subs = getSubmissionsForStudent(active.id, active.username);
-    const graded = subs.filter((s) => s.status === "graded");
-    setGradedItems(graded);
+    async function loadData() {
+      try {
+        const dbGrades = await getStudentGradesFromDB(active.id || active.username);
+        if (dbGrades && dbGrades.length > 0) {
+          setGradedItems(dbGrades);
+        } else {
+          const subs = getSubmissionsForStudent(active.id, active.username);
+          const graded = subs.filter((s) => s.status === "graded");
+          setGradedItems(graded);
+        }
+      } catch (err) {
+        console.error("Failed to load student grades from DB:", err);
+      }
+    }
+    loadData();
   }, []);
 
   const totalScore = gradedItems.reduce((acc, curr) => acc + (curr.score || 0), 0);

@@ -29,6 +29,12 @@ import {
   AcademicGrade,
   AcademicSection,
 } from "@/lib/academic-store";
+import {
+  getGradeLevelsFromDB,
+  getSectionsFromDB,
+  createGradeLevelAction,
+  createSectionAction,
+} from "@/lib/services/academic-service";
 
 export default function AdminClassesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -38,9 +44,49 @@ export default function AdminClassesPage() {
   const [sections, setSections] = useState<AcademicSection[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const loadData = async () => {
+    try {
+      const [dbGrades, dbSections] = await Promise.all([
+        getGradeLevelsFromDB(),
+        getSectionsFromDB(),
+      ]);
+
+      if (dbGrades && dbGrades.length > 0) {
+        setGrades(
+          dbGrades.map((g) => ({
+            id: g.id,
+            name: g.name,
+            stage: "المرحلة الثانوية",
+            description: `المستوى الدراسي ${g.level_order}`,
+            tracks: ["علمي", "أدبي"],
+          }))
+        );
+      } else {
+        setGrades(getStoredGrades());
+      }
+
+      if (dbSections && dbSections.length > 0) {
+        setSections(
+          dbSections.map((s) => ({
+            id: s.id,
+            grade: s.grade_name,
+            name: s.name,
+            track: s.track_name,
+            capacity: s.capacity,
+            enrolled: s.enrolled_count,
+          }))
+        );
+      } else {
+        setSections(getStoredSections());
+      }
+    } catch {
+      setGrades(getStoredGrades());
+      setSections(getStoredSections());
+    }
+  };
+
   useEffect(() => {
-    setGrades(getStoredGrades());
-    setSections(getStoredSections());
+    loadData();
   }, []);
 
   const showToast = (msg: string) => {
@@ -62,57 +108,53 @@ export default function AdminClassesPage() {
   const [newSectionTrack, setNewSectionTrack] = useState("علمي");
   const [newSectionCapacity, setNewSectionCapacity] = useState(30);
 
-  const handleCreateGrade = (e: React.FormEvent) => {
+  const handleCreateGrade = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGradeName.trim()) return;
 
-    const newGradeObj: AcademicGrade = {
-      id: `grade-${Date.now()}`,
-      name: newGradeName.trim(),
-      stage: newGradeStage.trim() || "المرحلة الثانوية",
-      description: newGradeDescription.trim() || "مرحلة دراسية جديدة",
-      tracks: newGradeTracks.split("،").map((t) => t.trim()).filter(Boolean),
-    };
+    const res = await createGradeLevelAction(newGradeName.trim());
+    if (!res.success) {
+      showToast(res.error || "فشل إضافة الصف الدراسي.");
+      return;
+    }
 
-    saveStoredGrade(newGradeObj);
-    setGrades(getStoredGrades());
+    await loadData();
     setIsAddGradeModalOpen(false);
     setNewGradeName("");
     setNewGradeDescription("");
-    showToast(`تمت إضافة الصف الدراسي الجديد "${newGradeObj.name}" بنجاح!`);
+    showToast(`✅ تمت إضافة الصف الدراسي الجديد "${newGradeName.trim()}" وحفظه في Supabase بنجاح!`);
   };
 
   const handleDeleteGrade = (id: string, name: string) => {
     if (confirm(`هل أنت متأكد من حذف الصف الدراسي "${name}"؟`)) {
       deleteStoredGrade(id);
-      setGrades(getStoredGrades());
+      loadData();
       showToast(`تم حذف الصف الدراسي "${name}".`);
     }
   };
 
-  const handleCreateSection = (e: React.FormEvent) => {
+  const handleCreateSection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSectionName.trim()) return;
 
-    const newSectionObj: AcademicSection = {
-      id: `sec-${Date.now()}`,
-      name: newSectionName.trim(),
-      grade: selectedSectionGrade,
-      track: newSectionTrack,
-      capacity: newSectionCapacity,
-      enrolled: 0,
-    };
+    const gradeObj = grades.find((g) => g.name === selectedSectionGrade);
+    const gradeId = gradeObj?.id || "30000000-0000-0000-0000-000000000003";
 
-    saveStoredSection(newSectionObj);
-    setSections(getStoredSections());
+    const res = await createSectionAction(newSectionName.trim(), gradeId, newSectionCapacity);
+    if (!res.success) {
+      showToast(res.error || "فشل إضافة الشعبة.");
+      return;
+    }
+
+    await loadData();
     setIsAddSectionModalOpen(false);
-    showToast(`تمت إضافة "${newSectionObj.name}" إلى ${newSectionObj.grade} بنجاح!`);
+    showToast(`✅ تمت إضافة "${newSectionName.trim()}" إلى ${selectedSectionGrade} وحفظها في Supabase بنجاح!`);
   };
 
   const handleDeleteSection = (id: string, name: string) => {
     if (confirm(`هل أنت متأكد من حذف شعبة "${name}"؟`)) {
       deleteStoredSection(id);
-      setSections(getStoredSections());
+      loadData();
       showToast(`تم حذف شعبة "${name}".`);
     }
   };

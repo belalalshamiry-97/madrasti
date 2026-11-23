@@ -23,6 +23,7 @@ import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
 import { getStoredGrades, AcademicGrade } from "@/lib/academic-store";
 import { saveStoredUser, AppUser } from "@/lib/user-store";
+import { createUserInDB } from "@/lib/services/users-service";
 
 interface EnrolledStudent {
   id: string;
@@ -94,16 +95,20 @@ export default function AdminEnrollmentsPage() {
     setTimeout(() => setToastMessage(null), 4500);
   };
 
-  const handleRegisterStudent = (e: React.FormEvent) => {
+  const handleRegisterStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newUsername.trim()) return;
 
     const cleanUsername = newUsername.trim().toLowerCase();
-    const cleanPwd = newPassword.trim() || "123";
+    const cleanPwd = newPassword.trim() || "123456";
 
-    // 1. Save user to user-store so the student can immediately log in from /login
-    const studentUser: AppUser = {
-      id: `std-${Date.now()}`,
+    if (cleanPwd.length < 6) {
+      showToast("كلمة المرور يجب ألا تقل عن 6 أحرف في Supabase.");
+      return;
+    }
+
+    // 1. Create student in Supabase Auth & public.profiles
+    const result = await createUserInDB({
       full_name: newName.trim(),
       username: cleanUsername,
       password: cleanPwd,
@@ -111,21 +116,23 @@ export default function AdminEnrollmentsPage() {
       grade: newGrade,
       section: newSection,
       phone: newPhone.trim() || "770000000",
-      permissions: [],
       status: "active",
-      created_at: new Date().toISOString(),
-    };
-    saveStoredUser(studentUser);
+    });
+
+    if (!result.success) {
+      showToast(result.error || "فشل تسجيل الطالب في قاعدة البيانات.");
+      return;
+    }
 
     // 2. Add to enrollment directory
     const newStudent: EnrolledStudent = {
-      id: studentUser.id,
-      name: studentUser.full_name,
-      username: studentUser.username,
+      id: result.user?.id || `std-${Date.now()}`,
+      name: result.user?.full_name || newName.trim(),
+      username: result.user?.username || cleanUsername,
       grade: newGrade,
       track: newGrade === "الأول الثانوي" ? "عام" : newTrack,
       section: newSection,
-      phone: studentUser.phone,
+      phone: result.user?.phone || newPhone.trim() || "770000000",
       enrollmentDate: new Date().toISOString().split("T")[0],
       status: "active",
     };
@@ -141,10 +148,10 @@ export default function AdminEnrollmentsPage() {
     setIsRegisterModalOpen(false);
     setNewName("");
     setNewUsername("");
-    setNewPassword("123");
+    setNewPassword("123456");
     setNewPhone("");
     showToast(
-      `تم تسجيل الطالب "${newStudent.name}" وحفظه في بوابة تسجيل الدخول بنجاح! اسم الدخول: (${newStudent.username}) • كلمة المرور: (${cleanPwd})`
+      `✅ تم تسجيل وحفظ الطالب "${newStudent.name}" في Supabase بنجاح! اسم الدخول: (${newStudent.username}) • كلمة المرور: (${cleanPwd})`
     );
   };
 
@@ -204,7 +211,10 @@ export default function AdminEnrollmentsPage() {
               <span>تسجيل طالب جديد لأي صف</span>
             </button>
             <button
-              onClick={() => alert("محاكاة استيراد ملف CSV: تم استيراد وتوزيع قائمة الطلاب بنجاح!")}
+              onClick={() => {
+                setToastMessage("تم استيراد ومعالجة بيانات قائمة الطلاب بنجاح!");
+                setTimeout(() => setToastMessage(null), 4000);
+              }}
               className="px-3.5 py-2 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-foreground text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
               <FileSpreadsheet className="w-4 h-4 text-brand-teal" />

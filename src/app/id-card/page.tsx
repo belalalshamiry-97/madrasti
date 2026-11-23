@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   CreditCard,
@@ -16,18 +16,30 @@ import {
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
-import { MOCK_USERS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import { getSchoolInfo } from "@/lib/school-store";
 
 export default function IdCardPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const student = MOCK_USERS.student1;
+  const [student, setStudent] = useState(getActiveUser());
+  const [schoolInfo, setSchoolInfo] = useState(getSchoolInfo());
+  const [downloadNotice, setDownloadNotice] = useState(false);
+
+  useEffect(() => {
+    setStudent(getActiveUser());
+    setSchoolInfo(getSchoolInfo());
+  }, []);
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleDownload = () => {
-    alert("جارٍ حفظ وتنزيل البطاقة المدرسية الرقمية...");
+    setDownloadNotice(true);
+    setTimeout(() => {
+      window.print();
+    }, 300);
+    setTimeout(() => setDownloadNotice(false), 4000);
   };
 
   return (
@@ -53,7 +65,7 @@ export default function IdCardPage() {
             <div>
               <h1 className="text-xl font-bold text-foreground">البطاقة المدرسية الإلكترونية</h1>
               <p className="text-xs text-muted">
-                الهوية الرقمية المعتمدة لطلاب ثانوية مدرستي
+                الهوية الرقمية المعتمدة لطلاب {schoolInfo.school_name}
               </p>
             </div>
           </div>
@@ -76,6 +88,13 @@ export default function IdCardPage() {
           </div>
         </div>
 
+        {downloadNotice && (
+          <div className="p-3.5 rounded-2xl bg-brand-teal/20 border border-brand-teal/40 text-brand-teal text-xs font-bold flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <span>تم تجهيز البطاقة للطباعة والحفظ بصيغة PDF الرقمية.</span>
+          </div>
+        )}
+
         {/* Holographic ID Card Widget */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E293B] via-[#0F172A] to-[#1E293B] border-2 border-brand-cyan/40 p-6 sm:p-8 shadow-2xl space-y-6">
           {/* Top Holographic Strip */}
@@ -89,7 +108,7 @@ export default function IdCardPage() {
               </div>
               <div>
                 <h3 className="font-black text-foreground text-sm tracking-wide">
-                  ثانوية مدرستي النموذجية
+                  {schoolInfo.school_name}
                 </h3>
                 <span className="text-[10px] text-brand-cyan block">
                   بطاقة هوية طالب منتظم
@@ -99,7 +118,7 @@ export default function IdCardPage() {
 
             <div className="text-left" dir="ltr">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-brand-teal/20 text-brand-teal border border-brand-teal/30">
-                2026 - 2027
+                {schoolInfo.academic_year}
               </span>
             </div>
           </div>

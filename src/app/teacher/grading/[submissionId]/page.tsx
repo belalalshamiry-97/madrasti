@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -30,6 +30,7 @@ import {
   gradeSubmission,
   AssignmentSubmission,
 } from "@/lib/submission-store";
+import { gradeSubmissionInDB, getTeacherSubmissionsFromDB } from "@/lib/services/assignments-service";
 
 export default function SubmissionGradingPage() {
   const router = useRouter();
@@ -38,65 +39,104 @@ export default function SubmissionGradingPage() {
   const params = useParams();
   const submissionId = params?.submissionId as string;
 
-  const [submission, setSubmission] = useState<AssignmentSubmission | null>(null);
+  const [submission, setSubmission] = useState<any | null>(null);
   const [score, setScore] = useState<number | string>("");
   const [feedback, setFeedback] = useState<string>("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // File Preview Modal
   const [previewFileName, setPreviewFileName] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const active = getActiveUser("TEACHER");
     setTeacher(active);
 
-    const allSubs = getStoredSubmissions();
-    const found = allSubs.find((s) => s.id === submissionId) || allSubs[0];
-    if (found) {
-      setSubmission(found);
-      setScore(
-        found.score !== null && found.score !== undefined ? found.score : ""
-      );
-      setFeedback(found.feedback_notes || "");
+    async function loadData() {
+      try {
+        const dbSubs = await getTeacherSubmissionsFromDB(active.id || active.username);
+        const foundDb = dbSubs.find((s: any) => s.id === submissionId);
+        if (foundDb) {
+          setSubmission(foundDb);
+          setScore(foundDb.score !== null && foundDb.score !== undefined ? foundDb.score : "");
+          setFeedback(foundDb.feedback_notes || "");
+          return;
+        }
+      } catch (err) {
+        console.error("Error loading submission from DB:", err);
+      }
+
+      const allSubs = getStoredSubmissions();
+      const found = allSubs.find((s) => s.id === submissionId) || allSubs[0];
+      if (found) {
+        setSubmission(found);
+        setScore(
+          found.score !== null && found.score !== undefined ? found.score : ""
+        );
+        setFeedback(found.feedback_notes || "");
+      }
     }
+    loadData();
   }, [submissionId]);
 
-  const handlePublishGrade = (e: React.FormEvent) => {
+  const handlePublishGrade = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
     if (!submission) return;
     const numScore = parseFloat(String(score));
 
     if (isNaN(numScore) || numScore < 0 || numScore > submission.max_score) {
-      alert(`يرجى إدخال درجة صالحة بين 0 و ${submission.max_score}.`);
+      setErrorMessage(`يرجى إدخال درجة صالحة بين 0 و ${submission.max_score}.`);
       return;
     }
 
     setIsSubmitting(true);
-    // Real persistent grading saved to store
-    const success = gradeSubmission(
-      submission.id,
-      numScore,
-      feedback,
-      teacher.full_name
-    );
+    try {
+      // Save to Supabase DB
+      const res = await gradeSubmissionInDB({
+        submission_id: submission.id,
+        grader_id: teacher.id || teacher.username,
+        score: numScore,
+        feedback_notes: feedback,
+      });
 
-    if (success) {
-      setSuccessMessage(
-        `تم رصد الدرجة (${numScore} / ${submission.max_score}) وحفظها رسمياً في سجل درجات الطالب "${submission.student_name}" بنجاح!`
+      // Also sync to local store
+      gradeSubmission(
+        submission.id,
+        numScore,
+        feedback,
+        teacher.full_name
       );
-    }
 
-    setTimeout(() => {
+      if (res && !res.success) {
+        setErrorMessage(res.error || "تعذر حفظ النتيجة في قاعدة البيانات.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      setSuccessMessage(
+        `تم رصد الدرجة (${numScore} / ${submission.max_score}) وحفظها رسمياً في قاعدة بيانات درجات الطالب "${submission.student_name}" بنجاح!`
+      );
+
+      setTimeout(() => {
+        setIsSubmitting(false);
+        router.push("/teacher/grading");
+      }, 1500);
+    } catch (err: any) {
+      setErrorMessage(err.message || "حدث خطأ أثناء اعتماد الدرجة.");
       setIsSubmitting(false);
-      router.push("/teacher/grading");
-    }, 1500);
+    }
   };
 
   const handleRequestRevision = () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
     if (!feedback.trim()) {
-      alert("يرجى كتابة الملاحظات والأسباب المطلوب من الطالب تعديلها في الحل.");
+      setErrorMessage("يرجى كتابة الملاحظات والأسباب المطلوب من الطالب تعديلها في الحل.");
       return;
     }
 
@@ -163,6 +203,13 @@ export default function SubmissionGradingPage() {
           </div>
         )}
 
+        {errorMessage && (
+          <div className="p-4 rounded-2xl bg-status-danger/15 border border-status-danger/30 text-status-danger text-sm flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {/* 1. Student & Submission Info Banner */}
         <div className="p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -224,7 +271,7 @@ export default function SubmissionGradingPage() {
               الملفات والصور المرفقة من الطالب:
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {submission.files.map((file, idx) => (
+              {submission.files.map((file: any, idx: number) => (
                 <div
                   key={idx}
                   className="p-3.5 rounded-2xl bg-surface-secondary border border-border flex items-center justify-between gap-3"

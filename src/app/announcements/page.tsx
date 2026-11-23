@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Megaphone,
@@ -21,6 +21,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_ANNOUNCEMENTS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
+import { getAnnouncementsFromDB, createAnnouncementInDB } from "@/lib/services/communications-service";
 import { Announcement } from "@/types/database.types";
 import { cn } from "@/lib/utils";
 
@@ -32,58 +33,59 @@ interface ExtendedAnnouncement extends Announcement {
 export default function AnnouncementsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(MOCK_USERS.student1);
+  const [announcements, setAnnouncements] = useState<ExtendedAnnouncement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const active = getActiveUser();
     setCurrentUser(active);
-  }, []);
 
-  const [announcements, setAnnouncements] = useState<ExtendedAnnouncement[]>([
-    {
-      id: "d1000000-0000-0000-0000-000000000002",
-      title: "جدول الاختبارات النصفية للفصل الدراسي الأول 2026",
-      content:
-        "أعزاءنا الطلاب والطالبات، نود إحاطتكم بأنه تم نشر جدول الاختبارات النصفية للعام 2026 عبر قسم المقررات. يرجى الالتزام بالحضور بالزي المدرسي الموحد والوصول قبل موعد الاختبار بـ 15 دقيقة على الأقل.",
-      target_audience: "all",
-      created_by: "د. عبد الرحمن باحميد (مدير المدرسة)",
-      created_at: "2026-11-22T08:30:00Z",
-      priority: "urgent",
-      is_pinned: true,
-    },
-    {
-      id: "d1000000-0000-0000-0000-000000000001",
-      title: "أهلاً بكم في العام الدراسي 2026-2027",
-      content:
-        "ترحب إدارة ثانوية مدرستي بجميع المعلمين والطلاب في بوابتنا التعليمية الإلكترونية المتكاملة. نتمنى لكم عاماً دراسياً حافلاً بالتميز والنجاح الأكاديمي.",
-      target_audience: "all",
-      created_by: "د. عبد الرحمن باحميد (مدير المدرسة)",
-      created_at: "2026-11-20T08:00:00Z",
-      priority: "important",
-      is_pinned: true,
-    },
-    {
-      id: "d1000000-0000-0000-0000-000000000003",
-      title: "تنبيه خاص لطلاب الثالث الثانوي (شعبة علمي - 1)",
-      content:
-        "سيتم إجراء تطبيق عملي لمادة أمنية النظم والشبكات في معمل الحاسوب يوم الثلاثاء القادم، يرجى إحضار أجهزة اللابتوب أو الفلاشات المحملة بنظام التشغيل الافتراضي.",
-      target_audience: "section",
-      created_by: "أ. فاطمة العولقي",
-      created_at: "2026-11-19T11:00:00Z",
-      priority: "normal",
-      is_pinned: false,
-    },
-    {
-      id: "d1000000-0000-0000-0000-000000000004",
-      title: "اجتماع الكادر التعليمي ومناقشة تقارير الغياب",
-      content:
-        "يعقد يوم الخميس القادم اجتماع للهيئة التدريسية بقاعة الاجتماعات لمراجعة خطط التعويض ونسب التفاعل على الواجبات الإلكترونية.",
-      target_audience: "teachers",
-      created_by: "إدارة الشؤون الأكاديمية",
-      created_at: "2026-11-18T14:00:00Z",
-      priority: "normal",
-      is_pinned: false,
-    },
-  ]);
+    async function loadData() {
+      setIsLoading(true);
+      try {
+        const dbAnnouncements = await getAnnouncementsFromDB();
+        if (dbAnnouncements && dbAnnouncements.length > 0) {
+          setAnnouncements(
+            dbAnnouncements.map((a: any) => ({
+              ...a,
+              priority: "normal",
+              is_pinned: false,
+            }))
+          );
+        } else {
+          setAnnouncements([
+            {
+              id: "d1000000-0000-0000-0000-000000000002",
+              title: "جدول الاختبارات النصفية للفصل الدراسي الأول 2026",
+              content:
+                "أعزاءنا الطلاب والطالبات، نود إحاطتكم بأنه تم نشر جدول الاختبارات النصفية للعام 2026 عبر قسم المقررات. يرجى الالتزام بالحضور بالزي المدرسي الموحد والوصول قبل موعد الاختبار بـ 15 دقيقة على الأقل.",
+              target_audience: "all",
+              created_by: "د. عبد الرحمن باحميد (مدير المدرسة)",
+              created_at: "2026-11-22T08:30:00Z",
+              priority: "urgent",
+              is_pinned: true,
+            },
+            {
+              id: "d1000000-0000-0000-0000-000000000001",
+              title: "أهلاً بكم في العام الدراسي 2026-2027",
+              content:
+                "ترحب إدارة ثانوية مدرستي بجميع المعلمين والطلاب في بوابتنا التعليمية الإلكترونية المتكاملة. نتمنى لكم عاماً دراسياً حافلاً بالتميز والنجاح الأكاديمي.",
+              target_audience: "all",
+              created_by: "د. عبد الرحمن باحميد (مدير المدرسة)",
+              created_at: "2026-11-20T08:00:00Z",
+              priority: "important",
+              is_pinned: true,
+            },
+          ]);
+        }
+      } catch (err) {
+        console.error("Failed to load announcements from DB:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   const [activeTab, setActiveTab] = useState<"all" | "teachers" | "students" | "section">("all");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -112,7 +114,7 @@ export default function AnnouncementsPage() {
     });
   }, [announcements, activeTab, currentUser]);
 
-  const handleCreateAnnouncement = (e: React.FormEvent) => {
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newContent.trim()) return;
 
@@ -129,19 +131,29 @@ export default function AnnouncementsPage() {
       is_pinned: newIsPinned,
     };
 
-    setTimeout(() => {
+    try {
+      await createAnnouncementInDB({
+        title: newTitle.trim(),
+        content: newContent.trim(),
+        target_audience: newAudience,
+        created_by: currentUser.id || currentUser.username,
+      });
+
       setAnnouncements((prev) => [newEntry, ...prev]);
       setNewTitle("");
       setNewContent("");
       setNewPriority("normal");
       setNewIsPinned(false);
-      setIsSubmitting(false);
       setPublishSuccess(true);
       setTimeout(() => {
         setPublishSuccess(false);
         setIsCreateModalOpen(false);
       }, 1000);
-    }, 400);
+    } catch (err) {
+      console.error("Error creating announcement:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getPriorityBadge = (priority?: string) => {

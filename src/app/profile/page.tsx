@@ -15,6 +15,7 @@ import {
   Save,
   MapPin,
   Lock,
+  AlertCircle,
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -43,6 +44,7 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,9 +55,14 @@ export default function ProfilePage() {
   const handleSavePassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPassword || newPassword !== confirmPassword) {
-      alert("كلمة المرور الجديدة غير متطابقة.");
+      setPasswordError("كلمة المرور الجديدة وتأكيدها غير متطابقين.");
       return;
     }
+    if (newPassword.length < 6) {
+      setPasswordError("يجب أن تتكون كلمة المرور من 6 أحرف أو أرقام على الأقل.");
+      return;
+    }
+    setPasswordError(null);
     setPasswordSuccess(true);
     setCurrentPassword("");
     setNewPassword("");
@@ -204,6 +211,12 @@ export default function ProfilePage() {
               <span className="text-xs font-bold text-brand-teal flex items-center gap-1 animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4" />
                 تم تحديث كلمة المرور بنجاح!
+              </span>
+            )}
+            {passwordError && (
+              <span className="text-xs font-bold text-status-danger flex items-center gap-1 animate-in fade-in">
+                <AlertCircle className="w-4 h-4" />
+                {passwordError}
               </span>
             )}
           </div>

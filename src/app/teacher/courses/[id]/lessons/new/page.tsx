@@ -22,6 +22,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_COURSES } from "@/lib/mock-data";
 import { validateFile, formatBytes } from "@/lib/storage";
+import { createLessonInDB } from "@/lib/services/lessons-service";
 
 export default function NewLessonPage() {
   const router = useRouter();
@@ -86,27 +87,58 @@ export default function NewLessonPage() {
     setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (targetStatus: "draft" | "published") => {
+  const handleSubmit = async (targetStatus: "draft" | "published") => {
     if (!title.trim()) {
-      alert("يرجى إدخال عنوان الدرس.");
+      setFileError("يرجى إدخال عنوان الدرس.");
       return;
     }
 
     setIsSubmitting(true);
     setStatus(targetStatus);
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSuccessMessage(
-        targetStatus === "published"
-          ? "تم نشر الدرس بنجاح للطلاب في رحلة المقرر!"
-          : "تم حفظ الدرس كمسودة بنجاح (لا يظهر للطلاب حتى تقوم بنشره)."
-      );
+    const materials: any[] = attachedFiles.map((f) => ({
+      title: f.name,
+      material_type: f.ext === "pdf" ? "pdf" : "document",
+      file_path: `materials/${f.name}`,
+      file_size_bytes: f.size,
+    }));
 
-      setTimeout(() => {
-        router.push(`/teacher/courses/${course.id}/lessons`);
-      }, 1500);
-    }, 600);
+    if (videoUrl && videoUrl.trim()) {
+      materials.push({
+        title: "رابط فيديو المحاضرة",
+        material_type: "video_link",
+        external_url: videoUrl.trim(),
+      });
+    }
+
+    const targetCourseId = courseId || "80000000-0000-0000-0000-000000000001";
+    const res = await createLessonInDB({
+      class_subject_id: targetCourseId,
+      lesson_number: lessonNumber,
+      title: title.trim(),
+      description: description.trim() || undefined,
+      objectives: objectives.trim() || undefined,
+      content_html: contentHtml.trim() || undefined,
+      status: targetStatus,
+      materials,
+    });
+
+    setIsSubmitting(false);
+
+    if (!res.success) {
+      setFileError(res.error || "فشل حفظ الدرس في قاعدة البيانات.");
+      return;
+    }
+
+    setSuccessMessage(
+      targetStatus === "published"
+        ? "✅ تم نشر الدرس بنجاح للطلاب وحفظه في قاعدة البيانات Supabase!"
+        : "✅ تم حفظ مسودة الدرس في Supabase بنجاح!"
+    );
+
+    setTimeout(() => {
+      router.push(`/teacher/courses/${targetCourseId}/lessons`);
+    }, 1500);
   };
 
   return (

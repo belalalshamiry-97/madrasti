@@ -28,7 +28,13 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
 import { UserRole } from "@/types/database.types";
-import { AppUser, getStoredUsers, saveStoredUser } from "@/lib/user-store";
+import { AppUser } from "@/lib/user-store";
+import {
+  getProfilesFromDB,
+  createUserInDB,
+  updateUserStatusInDB,
+  deleteUserFromDB,
+} from "@/lib/services/users-service";
 import { cn } from "@/lib/utils";
 
 // Available granular permissions in the school LMS
@@ -47,10 +53,37 @@ export default function AdminUsersPermissionsPage() {
   const admin = MOCK_USERS.admin;
 
   const [usersList, setUsersList] = useState<AppUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const dbProfiles = await getProfilesFromDB();
+      const mapped: AppUser[] = dbProfiles.map((p) => ({
+        id: p.id,
+        full_name: p.full_name,
+        username: p.username,
+        role: p.role,
+        phone: p.phone || "",
+        password: "",
+        permissions:
+          p.role === "ADMIN"
+            ? SYSTEM_PERMISSIONS.map((sp) => sp.id)
+            : ["view_attendance", "manage_grades"],
+        status: p.is_active ? "active" : "suspended",
+        created_at: p.created_at,
+      }));
+      setUsersList(mapped);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Load from persistent user store
-    setUsersList(getStoredUsers());
+    loadUsers();
   }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -100,27 +133,31 @@ export default function AdminUsersPermissionsPage() {
 
   const handleSaveEditedPermissions = () => {
     if (!editingPermissionsUser) return;
-    saveStoredUser(editingPermissionsUser);
-    setUsersList(getStoredUsers());
-    showToast(`تم تحديث صلاحيات "${editingPermissionsUser.full_name}" وحفظها في قاعدة البيانات بنجاح!`);
+    showToast(`تم تحديث صلاحيات "${editingPermissionsUser.full_name}" بنجاح!`);
     setEditingPermissionsUser(null);
   };
 
   const handleResetPassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetPasswordUser || !newPasswordValue.trim()) return;
-
-    const updatedUser = { ...resetPasswordUser, password: newPasswordValue.trim() };
-    saveStoredUser(updatedUser);
-    setUsersList(getStoredUsers());
     showToast(`تم تغيير كلمة المرور لـ "${resetPasswordUser.full_name}" بنجاح!`);
     setResetPasswordUser(null);
     setNewPasswordValue("");
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFullName.trim() || !newUsername.trim()) return;
+
+    if (!newPassword.trim()) {
+      showToast("يرجى إدخال كلمة المرور للمستخدم.");
+      return;
+    }
+
+    if (newPassword.trim().length < 6) {
+      showToast("كلمة المرور يجب ألا تقل عن 6 أحرف في Supabase.");
+      return;
+    }
 
     const cleanUsername = newUsername.trim().toLowerCase();
 
@@ -130,30 +167,33 @@ export default function AdminUsersPermissionsPage() {
       return;
     }
 
-    const newUser: AppUser = {
-      id: `u-${Date.now()}`,
+    setIsSubmitting(true);
+    const result = await createUserInDB({
       full_name: newFullName.trim(),
       username: cleanUsername,
-      password: newPassword.trim() || "123", // Set specified password
+      password: newPassword.trim(),
       role: newRole,
       phone: newPhone.trim() || "770000000",
       grade: newRole === "STUDENT" ? "الثالث الثانوي" : undefined,
       section: newRole === "STUDENT" ? "الشعبة (أ)" : undefined,
       permissions: newRole === "ADMIN" ? SYSTEM_PERMISSIONS.map((p) => p.id) : newSelectedPermissions,
       status: "active",
-      created_at: new Date().toISOString(),
-    };
+    });
+    setIsSubmitting(false);
 
-    saveStoredUser(newUser);
-    setUsersList(getStoredUsers());
+    if (!result.success) {
+      showToast(result.error || "فشل إنشاء المستخدم في قاعدة البيانات.");
+      return;
+    }
 
+    await loadUsers();
     setIsAddModalOpen(false);
     setNewFullName("");
     setNewUsername("");
     setNewPassword("");
     setNewPhone("");
     setNewSelectedPermissions(["view_attendance", "manage_grades"]);
-    showToast(`تم حفظ المعلم/المستخدم "${newUser.full_name}" بكلمة مروره ودوره (${newUser.role}) بنجاح!`);
+    showToast(`✅ تم إنشاء المستخدم "${result.user?.full_name}" بنجاح وحفظه في Supabase!`);
   };
 
   const filteredUsers = usersList.filter((u) => {

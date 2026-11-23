@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -17,13 +17,14 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import { getAttendanceForStudentFromDB } from "@/lib/services/attendance-service";
 import { cn } from "@/lib/utils";
 
 export default function StudentAttendancePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const student = MOCK_USERS.student1;
-
-  const logs = [
+  const [student, setStudent] = useState(MOCK_USERS.student1);
+  const [logs, setLogs] = useState<any[]>([
     {
       date: "2026/11/22",
       subject: "إدارة الشبكات",
@@ -52,7 +53,24 @@ export default function StudentAttendancePage() {
       statusLabel: "حاضر",
       notes: "حضور نشط ومشاركة",
     },
-  ];
+  ]);
+
+  useEffect(() => {
+    const active = getActiveUser("STUDENT");
+    setStudent(active);
+
+    async function loadData() {
+      try {
+        const dbLogs = await getAttendanceForStudentFromDB(active.id || active.username);
+        if (dbLogs && dbLogs.length > 0) {
+          setLogs(dbLogs);
+        }
+      } catch (err) {
+        console.error("Failed to load student attendance from DB:", err);
+      }
+    }
+    loadData();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">

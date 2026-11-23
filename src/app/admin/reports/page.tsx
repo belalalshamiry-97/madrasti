@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   BarChart3,
@@ -14,27 +14,76 @@ import {
   ShieldAlert,
   ChevronRight,
   Trophy,
+  Loader2,
+  CheckCircle2,
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { MOCK_USERS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import { getSchoolInfo } from "@/lib/school-store";
+import { getAdminLiveStatsFromDB, AdminLiveStats } from "@/lib/services/settings-service";
 import { cn } from "@/lib/utils";
 
 export default function AdminReportsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const admin = MOCK_USERS.admin;
+  const [currentUser, setCurrentUser] = useState(getActiveUser());
+  const [schoolInfo, setSchoolInfo] = useState(getSchoolInfo());
+  const [isLoading, setIsLoading] = useState(true);
+  const [exportNotice, setExportNotice] = useState(false);
+  const [stats, setStats] = useState<AdminLiveStats>({
+    studentsCount: 0,
+    teachersCount: 0,
+    classesCount: 0,
+    assignmentsCount: 0,
+    submissionsCount: 0,
+    attendanceRate: 95.2,
+    averageGrade: 88.4,
+    gradeBreakdown: [
+      { gradeName: "الأول الثانوي", rate: 96.0 },
+      { gradeName: "الثاني الثانوي", rate: 94.0 },
+      { gradeName: "الثالث الثانوي", rate: 95.6 },
+    ],
+    topStudents: [],
+  });
+
+  useEffect(() => {
+    const user = getActiveUser();
+    setCurrentUser(user);
+    setSchoolInfo(getSchoolInfo());
+
+    async function loadStats() {
+      try {
+        const liveStats = await getAdminLiveStatsFromDB();
+        setStats(liveStats);
+      } catch (err) {
+        console.error("Failed to load live stats:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadStats();
+  }, []);
+
+  const handleExportPDF = () => {
+    setExportNotice(true);
+    setTimeout(() => {
+      window.print();
+    }, 300);
+    setTimeout(() => setExportNotice(false), 4000);
+  };
 
   return (
     <div className="min-h-screen bg-background pb-12 flex flex-col">
       <AppHeader
-        user={admin}
+        user={currentUser}
         onOpenSidebar={() => setIsSidebarOpen(true)}
       />
 
       <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
-        user={admin}
+        user={currentUser}
       />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -47,21 +96,28 @@ export default function AdminReportsPage() {
             <div>
               <h1 className="text-xl font-bold text-foreground">التقارير والمؤشرات الأكاديمية الشاملة</h1>
               <p className="text-xs text-muted">
-                إحصائيات إدارية حية لثانوية مدرستي — الفصل الدراسي الأول 2026-2027
+                إحصائيات إدارية حية لـ {schoolInfo.school_name} — {schoolInfo.current_term} {schoolInfo.academic_year}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => alert("تم تصدير التقرير بصيغة PDF بنجاح!")}
+              onClick={handleExportPDF}
               className="px-3.5 py-2 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-xs font-semibold text-brand-cyan flex items-center gap-1.5 transition-colors"
             >
               <Download className="w-4 h-4" />
-              تصدير كـ PDF
+              تصدير كـ PDF / طباعة
             </button>
           </div>
         </div>
+
+        {exportNotice && (
+          <div className="p-3.5 rounded-2xl bg-brand-teal/20 border border-brand-teal/40 text-brand-teal text-xs font-bold flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <span>تم تجهيز التقرير بنجاح! يمكنك حفظه كملف PDF أو طباعته من نافذة الطباعة.</span>
+          </div>
+        )}
 
         {/* Key KPI Metrics Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -70,10 +126,12 @@ export default function AdminReportsPage() {
               <span>إجمالي الطلاب المسجلين</span>
               <Users className="w-4 h-4 text-brand-cyan" />
             </div>
-            <span className="block text-2xl font-black text-foreground">240</span>
+            <span className="block text-2xl font-black text-foreground">
+              {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-brand-cyan" /> : stats.studentsCount}
+            </span>
             <span className="text-[11px] text-brand-teal flex items-center gap-1">
               <TrendingUp className="w-3 h-3" />
-              +12 طالب هذا الفصل
+              نشطون في الفصول
             </span>
           </div>
 
@@ -82,9 +140,11 @@ export default function AdminReportsPage() {
               <span>نسبة الحضور المدرسية</span>
               <CalendarCheck className="w-4 h-4 text-brand-teal" />
             </div>
-            <span className="block text-2xl font-black text-brand-teal">95.2%</span>
+            <span className="block text-2xl font-black text-brand-teal">
+              {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-brand-teal" /> : `${stats.attendanceRate}%`}
+            </span>
             <span className="text-[11px] text-muted">
-              معدل غياب منخفض جداً
+              معدل التزام عام
             </span>
           </div>
 
@@ -93,9 +153,11 @@ export default function AdminReportsPage() {
               <span>تسليم التكاليف والأنشطة</span>
               <FileCheck2 className="w-4 h-4 text-status-warning" />
             </div>
-            <span className="block text-2xl font-black text-status-warning">91.8%</span>
+            <span className="block text-2xl font-black text-status-warning">
+              {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-status-warning" /> : stats.submissionsCount}
+            </span>
             <span className="text-[11px] text-muted">
-              438 تكليف تم تسليمه
+              {stats.assignmentsCount > 0 ? `${stats.assignmentsCount} تكليف متاح` : "سجل التسليمات الحية"}
             </span>
           </div>
 
@@ -104,9 +166,11 @@ export default function AdminReportsPage() {
               <span>متوسط درجات الطلاب العام</span>
               <GraduationCap className="w-4 h-4 text-purple-400" />
             </div>
-            <span className="block text-2xl font-black text-purple-400">86.4%</span>
+            <span className="block text-2xl font-black text-purple-400">
+              {isLoading ? <Loader2 className="w-6 h-6 animate-spin text-purple-400" /> : `${stats.averageGrade}%`}
+            </span>
             <span className="text-[11px] text-brand-teal">
-              تقدير عام: ممتاز
+              {stats.averageGrade >= 90 ? "تقدير عام: ممتاز" : stats.averageGrade >= 80 ? "تقدير عام: جيد جداً" : "تقدير عام: جيد"}
             </span>
           </div>
         </div>
@@ -118,38 +182,20 @@ export default function AdminReportsPage() {
           </h3>
 
           <div className="space-y-4 text-xs">
-            {/* Grade 1 */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between font-bold">
-                <span className="text-foreground">الأول الثانوي (عام - الشعب 1 و 2)</span>
-                <span className="text-brand-teal">96.0%</span>
+            {stats.gradeBreakdown.map((gb, i) => (
+              <div key={i} className="space-y-1.5">
+                <div className="flex items-center justify-between font-bold">
+                  <span className="text-foreground">{gb.gradeName}</span>
+                  <span className={i === 1 ? "text-brand-cyan" : "text-brand-teal"}>{gb.rate}%</span>
+                </div>
+                <div className="w-full h-3 rounded-full bg-surface-secondary overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full", i === 1 ? "bg-brand-cyan" : "bg-brand-teal")}
+                    style={{ width: `${gb.rate}%` }}
+                  ></div>
+                </div>
               </div>
-              <div className="w-full h-3 rounded-full bg-surface-secondary overflow-hidden">
-                <div className="h-full bg-brand-teal rounded-full" style={{ width: "96%" }}></div>
-              </div>
-            </div>
-
-            {/* Grade 2 */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between font-bold">
-                <span className="text-foreground">الثاني الثانوي (علمي وأدبي)</span>
-                <span className="text-brand-cyan">94.0%</span>
-              </div>
-              <div className="w-full h-3 rounded-full bg-surface-secondary overflow-hidden">
-                <div className="h-full bg-brand-cyan rounded-full" style={{ width: "94%" }}></div>
-              </div>
-            </div>
-
-            {/* Grade 3 */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between font-bold">
-                <span className="text-foreground">الثالث الثانوي (الشهادة الثانوية - علمي وأدبي)</span>
-                <span className="text-brand-teal">95.6%</span>
-              </div>
-              <div className="w-full h-3 rounded-full bg-surface-secondary overflow-hidden">
-                <div className="h-full bg-brand-teal rounded-full" style={{ width: "95.6%" }}></div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -160,42 +206,52 @@ export default function AdminReportsPage() {
               <Trophy className="w-5 h-5 text-status-warning" />
               أوائل الطلاب المتفوقين في التقييمات والاختبارات:
             </h3>
-            <span className="text-xs text-brand-cyan font-bold">الفصل الأول</span>
+            <span className="text-xs text-brand-cyan font-bold">{schoolInfo.current_term}</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-            <div className="p-4 rounded-2xl bg-surface-secondary/60 border border-brand-teal/40 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="w-7 h-7 rounded-lg bg-brand-teal text-background flex items-center justify-center font-black text-xs">
-                  1
-                </span>
-                <span className="text-xs font-black text-brand-teal">99.2%</span>
+            {stats.topStudents.map((st, idx) => (
+              <div
+                key={st.id || idx}
+                className={cn(
+                  "p-4 rounded-2xl bg-surface-secondary/60 space-y-2 border",
+                  idx === 0
+                    ? "border-brand-teal/40"
+                    : idx === 1
+                    ? "border-brand-cyan/40"
+                    : "border-border"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span
+                    className={cn(
+                      "w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs",
+                      idx === 0
+                        ? "bg-brand-teal text-background"
+                        : idx === 1
+                        ? "bg-brand-cyan text-background"
+                        : "bg-surface text-foreground border border-border"
+                    )}
+                  >
+                    {idx + 1}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-xs font-black",
+                      idx === 0
+                        ? "text-brand-teal"
+                        : idx === 1
+                        ? "text-brand-cyan"
+                        : "text-foreground"
+                    )}
+                  >
+                    {st.percentage}%
+                  </span>
+                </div>
+                <h4 className="text-xs font-bold text-foreground">{st.name}</h4>
+                <span className="text-[11px] text-muted block">{st.grade} • @{st.username}</span>
               </div>
-              <h4 className="text-xs font-bold text-foreground">سارة خالد الكثيري</h4>
-              <span className="text-[11px] text-muted block">ثالث ثانوي • علمي 1</span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-surface-secondary/60 border border-brand-cyan/40 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="w-7 h-7 rounded-lg bg-brand-cyan text-background flex items-center justify-center font-black text-xs">
-                  2
-                </span>
-                <span className="text-xs font-black text-brand-cyan">98.5%</span>
-              </div>
-              <h4 className="text-xs font-bold text-foreground">عمر أحمد بافضل</h4>
-              <span className="text-[11px] text-muted block">ثالث ثانوي • علمي 1</span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-surface-secondary/60 border border-border space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="w-7 h-7 rounded-lg bg-surface text-foreground flex items-center justify-center font-black text-xs border border-border">
-                  3
-                </span>
-                <span className="text-xs font-black text-foreground">97.8%</span>
-              </div>
-              <h4 className="text-xs font-bold text-foreground">ريم علي العمودي</h4>
-              <span className="text-[11px] text-muted block">ثالث ثانوي • علمي 1</span>
-            </div>
+            ))}
           </div>
         </div>
       </main>

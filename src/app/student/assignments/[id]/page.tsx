@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -28,10 +28,9 @@ import { MOCK_USERS, MOCK_ASSIGNMENTS } from "@/lib/mock-data";
 import { validateFile, formatBytes } from "@/lib/storage";
 import { getActiveUser } from "@/lib/user-store";
 import {
-  getStoredSubmissions,
-  saveStoredSubmission,
-  AssignmentSubmission,
-} from "@/lib/submission-store";
+  getAssignmentByIdFromDB,
+  submitAssignmentInDB,
+} from "@/lib/services/assignments-service";
 
 export default function StudentAssignmentDetailsPage() {
   const router = useRouter();
@@ -40,10 +39,11 @@ export default function StudentAssignmentDetailsPage() {
   const params = useParams();
   const assignmentId = params?.id as string;
 
-  const assignment =
-    MOCK_ASSIGNMENTS.find((a) => a.id === assignmentId) || MOCK_ASSIGNMENTS[0];
+  const [assignment, setAssignment] = useState<any>(
+    MOCK_ASSIGNMENTS.find((a) => a.id === assignmentId) || MOCK_ASSIGNMENTS[0]
+  );
 
-  const [existingSubmission, setExistingSubmission] = useState<AssignmentSubmission | null>(null);
+  const [existingSubmission, setExistingSubmission] = useState<any | null>(null);
   const [answerText, setAnswerText] = useState("");
   const [solutionFiles, setSolutionFiles] = useState<{ name: string; size: number }[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -53,26 +53,33 @@ export default function StudentAssignmentDetailsPage() {
   >("not_started");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const active = getActiveUser("STUDENT");
     setStudent(active);
 
-    const allSubs = getStoredSubmissions();
-    const found = allSubs.find(
-      (s) =>
-        (s.assignment_id === assignment.id || s.assignment_title === assignment.title) &&
-        (s.student_id === active.id || s.student_username.toLowerCase() === active.username.toLowerCase())
-    );
-
-    if (found) {
-      setExistingSubmission(found);
-      setAnswerText(found.answer_text || "");
-      setSolutionFiles(found.files || []);
-      setSubmissionStatus(found.status === "graded" ? "graded" : "submitted");
+    async function loadData() {
+      try {
+        const dbAssign = await getAssignmentByIdFromDB(assignmentId, active.id || active.username);
+        if (dbAssign) {
+          setAssignment(dbAssign);
+          if (dbAssign.student_submission) {
+            setExistingSubmission(dbAssign.student_submission);
+            setAnswerText(dbAssign.student_submission.answer_text || "");
+            setSolutionFiles(dbAssign.student_submission.files || []);
+            setSubmissionStatus(
+              dbAssign.student_submission.status === "graded" ? "graded" : "submitted"
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Error loading assignment from DB:", err);
+      }
     }
-  }, [assignment.id, assignment.title]);
+    loadData();
+  }, [assignmentId]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError(null);
@@ -95,15 +102,35 @@ export default function StudentAssignmentDetailsPage() {
     setSolutionFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSaveDraft = () => {
-    setSubmissionStatus("draft");
-    alert("تم حفظ مسودة إجابتك بنجاح على الخادم. يمكنك العودة وإكمالها لاحقاً.");
+  const handleSaveDraft = async () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      await submitAssignmentInDB({
+        assignment_id: assignment.id,
+        student_id: student.id || student.username,
+        answer_text: answerText.trim(),
+        status: "draft",
+        files: solutionFiles.map((f) => ({ name: f.name, size: f.size, url: `submissions/${f.name}` })),
+      });
+      setSubmissionStatus("draft");
+      setSuccessMessage("تم حفظ مسودة إجابتك بنجاح في قاعدة البيانات. يمكنك إكمالها لاحقاً.");
+    } catch (err: any) {
+      setErrorMessage(err.message || "حدث خطأ أثناء حفظ المسودة.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleFinalSubmit = (e: React.FormEvent) => {
+  const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
     if (!answerText.trim() && solutionFiles.length === 0) {
-      alert("يرجى كتابة نص الإجابة أو إرفاق ملف/صورة حل الواجب.");
+      setErrorMessage("يرجى كتابة نص الإجابة أو إرفاق ملف/صورة حل الواجب.");
       return;
     }
 
@@ -116,35 +143,30 @@ export default function StudentAssignmentDetailsPage() {
       minute: "2-digit",
     });
 
-    const newSub: AssignmentSubmission = {
-      id: existingSubmission?.id || `sub-${Date.now()}`,
-      assignment_id: assignment.id,
-      assignment_title: assignment.title,
-      course_name: assignment.course_name,
-      grade: student.grade || "الثالث الثانوي",
-      student_id: student.id,
-      student_name: student.full_name,
-      student_username: student.username,
-      attempt_number: (existingSubmission?.attempt_number || 0) + 1,
-      answer_text: answerText.trim(),
-      status: "submitted",
-      submitted_at: nowFormatted,
-      files: solutionFiles.map((f) => ({ name: f.name, size: f.size, url: "#" })),
-      max_score: 10,
-      score: null,
-      feedback_notes: null,
-    };
+    try {
+      const res = await submitAssignmentInDB({
+        assignment_id: assignment.id,
+        student_id: student.id || student.username,
+        answer_text: answerText.trim(),
+        status: "submitted",
+        files: solutionFiles.map((f) => ({ name: f.name, size: f.size, url: `submissions/${f.name}` })),
+      });
 
-    saveStoredSubmission(newSub);
-    setExistingSubmission(newSub);
+      if (!res.success) {
+        setErrorMessage(res.error || "فشل إرسال الحل إلى قاعدة البيانات.");
+        setIsSubmitting(false);
+        return;
+      }
 
-    setTimeout(() => {
-      setIsSubmitting(false);
       setSubmissionStatus("submitted");
       setSuccessMessage(
-        `تم تأكيد إرسال حل الواجب بنجاح إلى المعلم المصحح! وقت الرفع: ${nowFormatted}`
+        `تم تسليم حل الواجب بنجاح وحفظه في قاعدة البيانات! وقت الرفع: ${nowFormatted}`
       );
-    }, 700);
+    } catch (err: any) {
+      setErrorMessage(err.message || "حدث خطأ أثناء إرسال الحل.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -238,6 +260,14 @@ export default function StudentAssignmentDetailsPage() {
           <div className="p-4 rounded-2xl bg-brand-teal/15 border border-brand-teal/30 text-brand-teal text-sm flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 shrink-0" />
             <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="p-4 rounded-2xl bg-status-danger/15 border border-status-danger/30 text-status-danger text-sm flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span>{errorMessage}</span>
           </div>
         )}
 

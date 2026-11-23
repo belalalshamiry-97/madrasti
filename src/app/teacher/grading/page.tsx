@@ -24,12 +24,14 @@ import { MOCK_USERS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
 import { getStoredSubjects, SubjectAssignment } from "@/lib/academic-store";
 import { getSubmissionsForTeacher, AssignmentSubmission } from "@/lib/submission-store";
+import { getTeacherSubmissionsFromDB } from "@/lib/services/assignments-service";
+import { getClassSubjectsFromDB } from "@/lib/services/academic-service";
 
 export default function TeacherGradingQueuePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentTeacher, setCurrentTeacher] = useState(MOCK_USERS.teacher1);
   const [teacherSubjects, setTeacherSubjects] = useState<SubjectAssignment[]>([]);
-  const [submissionsList, setSubmissionsList] = useState<AssignmentSubmission[]>([]);
+  const [submissionsList, setSubmissionsList] = useState<any[]>([]);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "graded">("all");
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>("ALL");
@@ -39,19 +41,49 @@ export default function TeacherGradingQueuePage() {
     const active = getActiveUser("TEACHER");
     setCurrentTeacher(active);
 
-    // Get submissions strictly for courses assigned to this teacher
-    const subs = getSubmissionsForTeacher(active.full_name, active.username);
-    setSubmissionsList(subs);
+    async function loadData() {
+      try {
+        const dbSubs = await getTeacherSubmissionsFromDB(active.id || active.username);
+        if (dbSubs && dbSubs.length > 0) {
+          setSubmissionsList(dbSubs);
+        } else {
+          const subs = getSubmissionsForTeacher(active.full_name, active.username);
+          setSubmissionsList(subs);
+        }
 
-    // Get subjects assigned to this active teacher from academic store
-    const allSubjects = getStoredSubjects();
-    const assigned = allSubjects.filter(
-      (s) =>
-        s.teacherName.toLowerCase().includes(active.full_name.toLowerCase()) ||
-        active.full_name.toLowerCase().includes(s.teacherName.toLowerCase())
-    );
+        const classSubjects = await getClassSubjectsFromDB();
+        const myClasses = classSubjects.filter(
+          (cs) =>
+            cs.teacher_id === active.id ||
+            cs.teacher_name?.toLowerCase().includes(active.full_name.toLowerCase())
+        );
 
-    setTeacherSubjects(assigned);
+        if (myClasses.length > 0) {
+          setTeacherSubjects(
+            myClasses.map((c) => ({
+              id: c.id,
+              name: c.subject_name,
+              code: c.subject_code,
+              type: "theory",
+              grade: c.grade_name,
+              section: c.section_name || "الشعبة (أ)",
+              teacherName: c.teacher_name || active.full_name,
+            }))
+          );
+        } else {
+          const allSubjects = getStoredSubjects();
+          const assigned = allSubjects.filter(
+            (s) =>
+              s.teacherName.toLowerCase().includes(active.full_name.toLowerCase()) ||
+              active.full_name.toLowerCase().includes(s.teacherName.toLowerCase())
+          );
+          setTeacherSubjects(assigned);
+        }
+      } catch (err) {
+        console.error("Failed to load teacher submissions:", err);
+      }
+    }
+    loadData();
   }, []);
 
   // Filter submissions strictly to ONLY courses assigned to this teacher

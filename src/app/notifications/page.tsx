@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Bell,
@@ -21,54 +21,42 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_NOTIFICATIONS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import {
+  getNotificationsForUserFromDB,
+  markNotificationAsReadInDB,
+} from "@/lib/services/communications-service";
 import { Notification } from "@/types/database.types";
 import { cn } from "@/lib/utils";
 
 export default function NotificationsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(MOCK_USERS.student1);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  React.useEffect(() => {
-    const match = document.cookie.match(new RegExp("(^| )madrasti_session_role=([^;]+)"));
-    const role = match ? match[2] : "STUDENT";
-    if (role === "TEACHER") setCurrentUser(MOCK_USERS.teacher1);
-    else if (role === "ADMIN") setCurrentUser(MOCK_USERS.admin);
-    else setCurrentUser(MOCK_USERS.student1);
+  useEffect(() => {
+    const active = getActiveUser();
+    setCurrentUser(active);
+
+    async function loadData() {
+      setIsLoading(true);
+      try {
+        const dbNotes = await getNotificationsForUserFromDB(active.id || active.username);
+        if (dbNotes && dbNotes.length > 0) {
+          setNotifications(dbNotes);
+        } else {
+          setNotifications(MOCK_NOTIFICATIONS);
+        }
+      } catch (err) {
+        console.error("Failed to load notifications from DB:", err);
+        setNotifications(MOCK_NOTIFICATIONS);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
   }, []);
-
-  const [notifications, setNotifications] = useState<Notification[]>(() => [
-    ...MOCK_NOTIFICATIONS,
-    {
-      id: "e1000000-0000-0000-0000-000000000003",
-      user_id: "cc000000-0000-0000-0000-000000000001",
-      title: "تم رصد نتيجة التكليف",
-      message: "قام م. بلال الشميري بتصحيح تكليف 2 (DHCP). الدرجة: 9.5 / 10.",
-      link_url: "/student/grades",
-      type: "grade",
-      is_read: false,
-      created_at: "2026-11-21T16:00:00Z",
-    },
-    {
-      id: "e1000000-0000-0000-0000-000000000004",
-      user_id: "cc000000-0000-0000-0000-000000000001",
-      title: "إعلان مدرسي جديد",
-      message: "أهلاً بكم في العام الدراسي 2026-2027 — ترحب إدارة ثانوية مدرستي بجميع منسوبيها.",
-      link_url: "/announcements",
-      type: "announcement",
-      is_read: true,
-      created_at: "2026-11-20T08:00:00Z",
-    },
-    {
-      id: "e1000000-0000-0000-0000-000000000005",
-      user_id: "cc000000-0000-0000-0000-000000000001",
-      title: "رسالة جديدة من المعلم",
-      message: "م. بلال الشميري: أهلاً عمر، تم الاطلاع على تقريرك وهو ممتاز جداً، استمر!",
-      link_url: "/messages",
-      type: "message",
-      is_read: true,
-      created_at: "2026-11-21T16:30:00Z",
-    },
-  ]);
 
   const [activeFilter, setActiveFilter] = useState<
     "all" | "unread" | "assignment" | "session" | "announcement" | "grade"
@@ -90,14 +78,24 @@ export default function NotificationsPage() {
     });
   }, [notifications, activeFilter]);
 
-  const handleMarkAsRead = (id: string) => {
+  const handleMarkAsRead = async (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
     );
+    try {
+      await markNotificationAsReadInDB(id);
+    } catch (err) {
+      console.error("Error marking notification read in DB:", err);
+    }
   };
 
   const handleMarkAllAsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    notifications.forEach((n) => {
+      if (!n.is_read) {
+        markNotificationAsReadInDB(n.id).catch(() => {});
+      }
+    });
   };
 
   const getNotificationIcon = (type: string) => {

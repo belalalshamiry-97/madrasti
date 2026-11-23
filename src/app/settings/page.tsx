@@ -16,6 +16,7 @@ import {
   MapPin,
   Calendar,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -23,7 +24,7 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
-import { getSchoolInfo, saveSchoolInfo, SchoolInfo } from "@/lib/school-store";
+import { getSchoolInfo, saveSchoolInfoAsync, syncSchoolInfoFromDB, SchoolInfo } from "@/lib/school-store";
 
 export default function SettingsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -33,7 +34,7 @@ export default function SettingsPage() {
   const [schoolInfo, setSchoolInfo] = useState<SchoolInfo>({
     school_name: "ثانوية مدرستي النموذجية",
     address: "حضرموت — المكلا — شارع المعلمين",
-    contact_phone: "+967-5-123456",
+    contact_phone: "+967-783085075",
     contact_email: "info@madrasti.school",
     academic_year: "2026-2027",
     current_term: "الفصل الدراسي الأول",
@@ -44,21 +45,32 @@ export default function SettingsPage() {
   const [assignmentAlerts, setAssignmentAlerts] = useState(true);
   const [gradesAlerts, setGradesAlerts] = useState(true);
   const [isSchoolSaved, setIsSchoolSaved] = useState(false);
+  const [isSavingSchool, setIsSavingSchool] = useState(false);
   const [isPrefSaved, setIsPrefSaved] = useState(false);
 
   useEffect(() => {
     const active = getActiveUser();
     setCurrentUser(active);
     setSchoolInfo(getSchoolInfo());
+    
+    // Fetch authoritative settings from Supabase
+    syncSchoolInfoFromDB().then((dbInfo) => {
+      if (dbInfo) setSchoolInfo(dbInfo);
+    });
   }, []);
 
-  const handleSaveSchoolSettings = (e: React.FormEvent) => {
+  const handleSaveSchoolSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!schoolInfo.school_name.trim()) return;
+    if (!schoolInfo.school_name.trim() || isSavingSchool) return;
 
-    saveSchoolInfo(schoolInfo);
-    setIsSchoolSaved(true);
-    setTimeout(() => setIsSchoolSaved(false), 3000);
+    setIsSavingSchool(true);
+    try {
+      await saveSchoolInfoAsync(schoolInfo);
+      setIsSchoolSaved(true);
+      setTimeout(() => setIsSchoolSaved(false), 3500);
+    } finally {
+      setIsSavingSchool(false);
+    }
   };
 
   const handleSavePreferences = () => {
@@ -128,10 +140,15 @@ export default function SettingsPage() {
 
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center justify-center gap-1.5 shadow-glow hover:brightness-110 transition-all shrink-0"
+                disabled={isSavingSchool}
+                className="px-5 py-2.5 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center justify-center gap-1.5 shadow-glow hover:brightness-110 transition-all shrink-0 disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
-                <span>حفظ وتطبيق اسم المدرسة</span>
+                {isSavingSchool ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                <span>{isSavingSchool ? "جاري الحفظ..." : "حفظ وتطبيق اسم المدرسة"}</span>
               </button>
             </div>
 

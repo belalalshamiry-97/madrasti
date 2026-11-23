@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -18,6 +18,9 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { MOCK_USERS, MOCK_COURSES } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
+import { getClassSubjectsFromDB, ClassSubjectAssignment } from "@/lib/services/academic-service";
+import { createQuizInDB } from "@/lib/services/quizzes-service";
 import { cn } from "@/lib/utils";
 
 interface QuestionDraft {
@@ -32,10 +35,11 @@ interface QuestionDraft {
 export default function TeacherQuizBuilderPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const teacher = MOCK_USERS.teacher1;
+  const [teacher, setTeacher] = useState(MOCK_USERS.teacher1);
+  const [availableClasses, setAvailableClasses] = useState<ClassSubjectAssignment[]>([]);
 
   const [title, setTitle] = useState("");
-  const [courseId, setCourseId] = useState(MOCK_COURSES[0].id);
+  const [courseId, setCourseId] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(15);
   const [passingScore, setPassingScore] = useState(5);
   const [description, setDescription] = useState("");
@@ -61,6 +65,21 @@ export default function TeacherQuizBuilderPage() {
 
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const active = getActiveUser("TEACHER");
+    setTeacher(active);
+
+    async function loadData() {
+      const classes = await getClassSubjectsFromDB();
+      setAvailableClasses(classes);
+      if (classes.length > 0) {
+        setCourseId(classes[0].id);
+      }
+    }
+    loadData();
+  }, []);
 
   const totalScore = questions.reduce((sum, q) => sum + Number(q.points || 0), 0);
 
@@ -104,21 +123,45 @@ export default function TeacherQuizBuilderPage() {
     );
   };
 
-  const handlePublishQuiz = (e: React.FormEvent) => {
+  const handlePublishQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
     if (!title.trim() || questions.some((q) => !q.question_text.trim())) {
-      alert("يرجى إكمال عنوان الاختبار وكتابة نصوص كافة الأسئلة.");
+      setErrorMessage("يرجى إكمال عنوان الاختبار وكتابة نصوص كافة الأسئلة والخيارات.");
       return;
     }
 
     setIsPublishing(true);
-    setTimeout(() => {
-      setIsPublishing(false);
+    try {
+      const res = await createQuizInDB({
+        class_subject_id: courseId,
+        title: title.trim(),
+        description: description.trim(),
+        duration_minutes: durationMinutes,
+        questions: questions.map((q) => ({
+          question_text: q.question_text,
+          question_type: q.question_type,
+          points: Number(q.points) || 1,
+          options: q.options,
+          correct_index: q.correct_index,
+        })),
+      });
+
+      if (!res.success) {
+        setErrorMessage(res.error || "فشل نشر الاختبار في قاعدة البيانات.");
+        setIsPublishing(false);
+        return;
+      }
+
       setPublishSuccess(true);
       setTimeout(() => {
         router.push("/teacher");
       }, 1500);
-    }, 500);
+    } catch (err: any) {
+      setErrorMessage(err.message || "حدث خطأ أثناء حفظ الاختبار.");
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -152,6 +195,13 @@ export default function TeacherQuizBuilderPage() {
             </div>
           </div>
         </div>
+
+        {errorMessage && (
+          <div className="p-4 rounded-2xl bg-status-danger/15 border border-status-danger/30 text-status-danger text-sm flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
         {publishSuccess ? (
           <div className="p-12 text-center rounded-3xl bg-surface border border-border shadow-card space-y-3">
@@ -191,11 +241,19 @@ export default function TeacherQuizBuilderPage() {
                     onChange={(e) => setCourseId(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground text-xs focus:outline-none focus:border-brand-cyan"
                   >
-                    {MOCK_COURSES.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.subject?.name}
-                      </option>
-                    ))}
+                    {availableClasses.length > 0 ? (
+                      availableClasses.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.subject_name} — {c.section_name} ({c.grade_name})
+                        </option>
+                      ))
+                    ) : (
+                      MOCK_COURSES.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.subject?.name}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 

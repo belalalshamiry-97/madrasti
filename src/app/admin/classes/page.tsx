@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -9,104 +9,211 @@ import {
   Users,
   CheckCircle2,
   Trash2,
-  Building,
+  GraduationCap,
+  Sparkles,
+  X,
+  Plus,
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
+import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
+import {
+  getStoredGrades,
+  saveStoredGrade,
+  deleteStoredGrade,
+  getStoredSections,
+  saveStoredSection,
+  deleteStoredSection,
+  AcademicGrade,
+  AcademicSection,
+} from "@/lib/academic-store";
 
 export default function AdminClassesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const admin = MOCK_USERS.admin;
 
-  const [sections, setSections] = useState([
-    { id: "1", name: "الشعبة (أ)", grade: "الثالث الثانوي", track: "علمي", capacity: 30, enrolled: 28 },
-    { id: "2", name: "الشعبة (ب)", grade: "الثالث الثانوي", track: "علمي", capacity: 30, enrolled: 26 },
-    { id: "3", name: "الشعبة (أ)", grade: "الثاني الثانوي", track: "علمي", capacity: 32, enrolled: 30 },
-    { id: "4", name: "الشعبة (ب)", grade: "الثاني الثانوي", track: "أدبي", capacity: 25, enrolled: 22 },
-    { id: "5", name: "الشعبة (أ)", grade: "الأول الثانوي", track: "عام", capacity: 35, enrolled: 34 },
-    { id: "6", name: "الشعبة (ب)", grade: "الأول الثانوي", track: "عام", capacity: 35, enrolled: 32 },
-  ]);
+  const [grades, setGrades] = useState<AcademicGrade[]>([]);
+  const [sections, setSections] = useState<AcademicSection[]>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  useEffect(() => {
+    setGrades(getStoredGrades());
+    setSections(getStoredSections());
+  }, []);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Modal 1: Add New Grade / Class
+  const [isAddGradeModalOpen, setIsAddGradeModalOpen] = useState(false);
+  const [newGradeName, setNewGradeName] = useState("");
+  const [newGradeStage, setNewGradeStage] = useState("المرحلة الثانوية");
+  const [newGradeDescription, setNewGradeDescription] = useState("");
+  const [newGradeTracks, setNewGradeTracks] = useState("علمي، أدبي");
+
+  // Modal 2: Add New Section
+  const [isAddSectionModalOpen, setIsAddSectionModalOpen] = useState(false);
   const [newSectionName, setNewSectionName] = useState("الشعبة (ج)");
-  const [newGrade, setNewGrade] = useState("الثالث الثانوي");
-  const [newTrack, setNewTrack] = useState("علمي");
-  const [newCapacity, setNewCapacity] = useState(30);
+  const [selectedSectionGrade, setSelectedSectionGrade] = useState("الثالث الثانوي");
+  const [newSectionTrack, setNewSectionTrack] = useState("علمي");
+  const [newSectionCapacity, setNewSectionCapacity] = useState(30);
 
-  const handleAddSection = (e: React.FormEvent) => {
+  const handleCreateGrade = (e: React.FormEvent) => {
     e.preventDefault();
-    setSections((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        name: newSectionName,
-        grade: newGrade,
-        track: newTrack,
-        capacity: newCapacity,
-        enrolled: 0,
-      },
-    ]);
-    setIsModalOpen(false);
-    alert("تمت إضافة الشعبة بنجاح!");
+    if (!newGradeName.trim()) return;
+
+    const newGradeObj: AcademicGrade = {
+      id: `grade-${Date.now()}`,
+      name: newGradeName.trim(),
+      stage: newGradeStage.trim() || "المرحلة الثانوية",
+      description: newGradeDescription.trim() || "مرحلة دراسية جديدة",
+      tracks: newGradeTracks.split("،").map((t) => t.trim()).filter(Boolean),
+    };
+
+    saveStoredGrade(newGradeObj);
+    setGrades(getStoredGrades());
+    setIsAddGradeModalOpen(false);
+    setNewGradeName("");
+    setNewGradeDescription("");
+    showToast(`تمت إضافة الصف الدراسي الجديد "${newGradeObj.name}" بنجاح!`);
+  };
+
+  const handleDeleteGrade = (id: string, name: string) => {
+    if (confirm(`هل أنت متأكد من حذف الصف الدراسي "${name}"؟`)) {
+      deleteStoredGrade(id);
+      setGrades(getStoredGrades());
+      showToast(`تم حذف الصف الدراسي "${name}".`);
+    }
+  };
+
+  const handleCreateSection = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSectionName.trim()) return;
+
+    const newSectionObj: AcademicSection = {
+      id: `sec-${Date.now()}`,
+      name: newSectionName.trim(),
+      grade: selectedSectionGrade,
+      track: newSectionTrack,
+      capacity: newSectionCapacity,
+      enrolled: 0,
+    };
+
+    saveStoredSection(newSectionObj);
+    setSections(getStoredSections());
+    setIsAddSectionModalOpen(false);
+    showToast(`تمت إضافة "${newSectionObj.name}" إلى ${newSectionObj.grade} بنجاح!`);
+  };
+
+  const handleDeleteSection = (id: string, name: string) => {
+    if (confirm(`هل أنت متأكد من حذف شعبة "${name}"؟`)) {
+      deleteStoredSection(id);
+      setSections(getStoredSections());
+      showToast(`تم حذف شعبة "${name}".`);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
-      <AppHeader
-        user={admin}
-        onOpenSidebar={() => setIsSidebarOpen(true)}
-      />
-
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        user={admin}
-      />
+      <AppHeader user={admin} onOpenSidebar={() => setIsSidebarOpen(true)} />
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={admin} />
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <Link
-            href="/admin"
-            className="p-2 -mr-2 rounded-xl text-muted hover:text-foreground transition-colors"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </Link>
-          <div className="text-center">
-            <h1 className="text-xl font-bold text-foreground">
-              إدارة الصفوف والشعب الدراسية
-            </h1>
-            <p className="text-xs text-status-warning mt-0.5">
-              تهيئة الفصول، المسارات، والقدرة الاستيعابية
-            </p>
+        {/* Header Breadcrumb & Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin"
+              className="p-2 -mr-2 rounded-xl text-muted hover:text-foreground transition-colors"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-black text-foreground flex items-center gap-2">
+                <Layers className="w-6 h-6 text-status-warning" />
+                إدارة الصفوف والمراحل والشعب الدراسية
+              </h1>
+              <p className="text-xs text-muted">
+                إمكانية إضافة صفوف دراسية جديدة للمدرسة وتوزيع الشعب والمسارات الاستيعابية
+              </p>
+            </div>
           </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-cyan text-background text-xs font-bold shadow-glow hover:opacity-90 transition-all"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">إضافة شعبة</span>
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsAddGradeModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-status-warning text-black font-black text-xs flex items-center gap-1.5 shadow-glow hover:brightness-110 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>إضافة صف دراسي جديد</span>
+            </button>
+            <button
+              onClick={() => setIsAddSectionModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center gap-1.5 shadow-glow hover:brightness-110 transition-all"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>إضافة شعبة جديدة</span>
+            </button>
+          </div>
         </div>
 
-        {/* Grade Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-            <span className="text-xs text-muted block">المرحلة الأولى</span>
-            <h3 className="text-lg font-bold text-foreground">الأول الثانوي</h3>
-            <p className="text-xs text-brand-cyan">المسار العام المشترك (شعبتان)</p>
+        {/* Toast Alert */}
+        {toastMessage && (
+          <div className="p-4 rounded-2xl bg-brand-teal/20 border border-brand-teal/40 text-brand-teal text-xs font-bold flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <span>{toastMessage}</span>
           </div>
-          <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-            <span className="text-xs text-muted block">المرحلة الثانية</span>
-            <h3 className="text-lg font-bold text-foreground">الثاني الثانوي</h3>
-            <p className="text-xs text-brand-teal">المسار العلمي والأدبي (شعبتان)</p>
+        )}
+
+        {/* Dynamic Grades Grid Cards */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-brand-cyan" />
+              الصفوف والمراحل الدراسية المعتمدة بالمنصة ({grades.length})
+            </h3>
           </div>
-          <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-            <span className="text-xs text-muted block">المرحلة الثالثة</span>
-            <h3 className="text-lg font-bold text-foreground">الثالث الثانوي</h3>
-            <p className="text-xs text-status-warning">الشهادة الثانوية العامة (شعبتان)</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {grades.map((g) => {
+              const gradeSections = sections.filter((s) => s.grade === g.name);
+              return (
+                <div
+                  key={g.id}
+                  className="p-5 rounded-3xl bg-surface border border-border shadow-card hover:border-status-warning/40 transition-all space-y-2 relative group"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[11px] text-muted block">{g.stage}</span>
+                      <h4 className="text-base font-black text-foreground">{g.name}</h4>
+                    </div>
+                    {/* Delete grade button (for custom added grades) */}
+                    {g.id.startsWith("grade-") && !["grade-1", "grade-2", "grade-3"].includes(g.id) && (
+                      <button
+                        onClick={() => handleDeleteGrade(g.id, g.name)}
+                        className="p-1 rounded-lg text-muted hover:text-status-danger transition-colors"
+                        title="حذف هذا الصف"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted">{g.description}</p>
+                  <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs">
+                    <span className="font-bold text-brand-cyan">
+                      {gradeSections.length} شعب دراسية
+                    </span>
+                    <span className="text-[11px] text-muted">
+                      {g.tracks.join(" • ")}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -115,7 +222,7 @@ export default function AdminClassesPage() {
           <div className="p-5 border-b border-border/80 flex items-center justify-between">
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <Layers className="w-4 h-4 text-brand-cyan" />
-              الشعب الدراسية الحالية
+              قائمة الشعب الدراسية المقيدة بالصفوف
             </h3>
             <span className="text-xs text-muted font-bold">
               {sections.length} شعب معتمدة
@@ -142,70 +249,185 @@ export default function AdminClassesPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6 text-xs text-muted self-end sm:self-auto">
+                <div className="flex items-center gap-4 text-xs text-muted self-end sm:self-auto">
                   <span className="flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-brand-cyan" />
-                    المقيدون: <strong className="text-foreground">{section.enrolled}</strong> / {section.capacity}
+                    القدرة الاستيعابية: <strong className="text-foreground">{section.enrolled}</strong> / {section.capacity} طالب
                   </span>
+
                   <span className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-brand-teal/15 text-brand-teal">
-                    نشطة
+                    شعبة نشطة
                   </span>
+
+                  <button
+                    onClick={() => handleDeleteSection(section.id, section.name)}
+                    className="p-1.5 rounded-lg bg-surface-secondary hover:bg-status-danger/20 text-muted hover:text-status-danger transition-colors"
+                    title="حذف الشعبة"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         </div>
+
+        <DeveloperFooter />
       </main>
 
-      {/* Add Section Modal */}
-      {isModalOpen && (
+      {/* Modal 1: Add New Grade */}
+      {isAddGradeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-surface p-6 rounded-3xl border border-border shadow-2xl max-w-md w-full space-y-4">
-            <h3 className="text-base font-bold text-foreground pb-2 border-b border-border">
-              إضافة شعبة دراسية جديدة
-            </h3>
-            <form onSubmit={handleAddSection} className="space-y-3 text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-status-warning" />
+                إضافة صف دراسي جديد للمدرسة
+              </h3>
+              <button
+                onClick={() => setIsAddGradeModalOpen(false)}
+                className="p-1 rounded-xl text-muted hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateGrade} className="space-y-3.5 text-xs">
               <div>
                 <label className="block font-semibold text-foreground mb-1">
-                  اسم الشعبة
+                  اسم الصف الدراسي الجديد
                 </label>
                 <input
                   type="text"
                   required
-                  value={newSectionName}
-                  onChange={(e) => setNewSectionName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground text-sm focus:outline-none focus:border-brand-cyan"
+                  placeholder="مثال: الرابع الإعدادي أو الصف المتقدم"
+                  value={newGradeName}
+                  onChange={(e) => setNewGradeName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                 />
               </div>
 
               <div>
                 <label className="block font-semibold text-foreground mb-1">
-                  الصف الدراسي
+                  المرحلة التعليمية
                 </label>
-                <select
-                  value={newGrade}
-                  onChange={(e) => setNewGrade(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground text-sm focus:outline-none focus:border-brand-cyan"
-                >
-                  <option value="الأول الثانوي">الأول الثانوي</option>
-                  <option value="الثاني الثانوي">الثاني الثانوي</option>
-                  <option value="الثالث الثانوي">الثالث الثانوي</option>
-                </select>
+                <input
+                  type="text"
+                  placeholder="مثال: المرحلة الثانوية العامة"
+                  value={newGradeStage}
+                  onChange={(e) => setNewGradeStage(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
+                />
               </div>
 
               <div>
                 <label className="block font-semibold text-foreground mb-1">
-                  المسار الدراسي
+                  المسارات المعتمدة في هذا الصف (مفصولة بفاصلة)
+                </label>
+                <input
+                  type="text"
+                  placeholder="مثال: علمي، أدبي، تكنولوجي"
+                  value={newGradeTracks}
+                  onChange={(e) => setNewGradeTracks(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-foreground mb-1">
+                  وصف مختصر للصف
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="تفاصيل إضافية عن هذا الصف..."
+                  value={newGradeDescription}
+                  onChange={(e) => setNewGradeDescription(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsAddGradeModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-surface-secondary text-muted hover:text-foreground"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-status-warning text-black font-black shadow-glow"
+                >
+                  حفظ الصف الدراسي
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Add New Section */}
+      {isAddSectionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-surface p-6 rounded-3xl border border-border shadow-2xl max-w-md w-full space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                <PlusCircle className="w-5 h-5 text-brand-cyan" />
+                إضافة شعبة دراسية جديدة
+              </h3>
+              <button
+                onClick={() => setIsAddSectionModalOpen(false)}
+                className="p-1 rounded-xl text-muted hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSection} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-foreground mb-1">
+                  الصف الدراسي التابع له الشعبة
                 </label>
                 <select
-                  value={newTrack}
-                  onChange={(e) => setNewTrack(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground text-sm focus:outline-none focus:border-brand-cyan"
+                  value={selectedSectionGrade}
+                  onChange={(e) => setSelectedSectionGrade(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                 >
-                  <option value="علمي">علمي</option>
-                  <option value="أدبي">أدبي</option>
-                  <option value="عام">عام</option>
+                  {grades.map((g) => (
+                    <option key={g.id} value={g.name}>{g.name}</option>
+                  ))}
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    اسم الشعبة
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newSectionName}
+                    onChange={(e) => setNewSectionName(e.target.value)}
+                    placeholder="الشعبة (ج)"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    المسار الدراسي
+                  </label>
+                  <select
+                    value={newSectionTrack}
+                    onChange={(e) => setNewSectionTrack(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
+                  >
+                    <option value="علمي">علمي</option>
+                    <option value="أدبي">أدبي</option>
+                    <option value="عام">عام</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -216,17 +438,17 @@ export default function AdminClassesPage() {
                   type="number"
                   min={10}
                   max={60}
-                  value={newCapacity}
-                  onChange={(e) => setNewCapacity(parseInt(e.target.value) || 30)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground text-sm focus:outline-none focus:border-brand-cyan"
+                  value={newSectionCapacity}
+                  onChange={(e) => setNewSectionCapacity(parseInt(e.target.value) || 30)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan font-mono"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/80">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-surface-secondary hover:bg-surface text-foreground font-semibold"
+                  onClick={() => setIsAddSectionModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-surface-secondary text-muted hover:text-foreground"
                 >
                   إلغاء
                 </button>
@@ -234,7 +456,7 @@ export default function AdminClassesPage() {
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-brand-cyan text-background font-bold shadow-glow"
                 >
-                  إضافة الشعبة
+                  حفظ الشعبة
                 </button>
               </div>
             </form>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -12,79 +12,64 @@ import {
   CheckCircle2,
   X,
   Save,
+  Users,
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
-
-interface SubjectItem {
-  id: string;
-  name: string;
-  code: string;
-  type: "theory" | "practical";
-  grade: string;
-  section: string;
-  teacherName: string;
-}
+import { getStoredUsers, AppUser } from "@/lib/user-store";
+import {
+  getStoredSubjects,
+  saveStoredSubject,
+  deleteStoredSubject,
+  getStoredGrades,
+  SubjectAssignment,
+} from "@/lib/academic-store";
 
 export default function AdminSubjectsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const admin = MOCK_USERS.admin;
 
-  const [subjects, setSubjects] = useState<SubjectItem[]>([
-    {
-      id: "1",
-      name: "إدارة الشبكات",
-      code: "NET-301",
-      type: "theory",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (أ) و (ب)",
-      teacherName: "م. بلال الشميري",
-    },
-    {
-      id: "2",
-      name: "أمنية النظم والشبكات",
-      code: "SEC-302",
-      type: "practical",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (أ)",
-      teacherName: "أ. فاطمة العولقي",
-    },
-    {
-      id: "3",
-      name: "برمجة التطبيقات المتقدمة",
-      code: "DEV-303",
-      type: "practical",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (أ)",
-      teacherName: "م. بلال الشميري",
-    },
-    {
-      id: "4",
-      name: "الرياضيات التطبيقية",
-      code: "MATH-304",
-      type: "theory",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (أ) و (ب)",
-      teacherName: "أ. فاطمة العولقي",
-    },
-  ]);
+  const [subjects, setSubjects] = useState<SubjectAssignment[]>([]);
+  const [teachersList, setTeachersList] = useState<AppUser[]>([]);
+  const [gradesList, setGradesList] = useState<string[]>([]);
+
+  useEffect(() => {
+    // Load subjects from persistent academic store
+    setSubjects(getStoredSubjects());
+
+    // Load registered teachers dynamically from persistent user store
+    const allUsers = getStoredUsers();
+    const teachers = allUsers.filter((u) => u.role === "TEACHER");
+    setTeachersList(teachers);
+
+    // Load available grades
+    const grades = getStoredGrades().map((g) => g.name);
+    setGradesList(grades);
+
+    if (teachers.length > 0) {
+      setNewTeacher(teachers[0].full_name);
+    }
+  }, []);
 
   // Add Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newCode, setNewCode] = useState("");
   const [newType, setNewType] = useState<"theory" | "practical">("theory");
-  const [newTeacher, setNewTeacher] = useState("م. بلال الشميري");
+  const [newGrade, setNewGrade] = useState("الثالث الثانوي");
+  const [newTeacher, setNewTeacher] = useState("");
   const [newSection, setNewSection] = useState("الشعبة (أ)");
 
   // Edit Modal State
-  const [editingSubject, setEditingSubject] = useState<SubjectItem | null>(null);
+  const [editingSubject, setEditingSubject] = useState<SubjectAssignment | null>(null);
   const [editName, setEditName] = useState("");
   const [editCode, setEditCode] = useState("");
   const [editType, setEditType] = useState<"theory" | "practical">("theory");
+  const [editGrade, setEditGrade] = useState("");
   const [editTeacher, setEditTeacher] = useState("");
   const [editSection, setEditSection] = useState("");
 
@@ -99,27 +84,33 @@ export default function AdminSubjectsPage() {
   const handleAddSubject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    const newEntry: SubjectItem = {
-      id: Date.now().toString(),
+
+    const teacherToAssign = newTeacher || (teachersList[0]?.full_name || "م. بلال الشميري");
+
+    const newEntry: SubjectAssignment = {
+      id: `sub-${Date.now()}`,
       name: newName.trim(),
-      code: newCode.trim() || "SUB-001",
+      code: newCode.trim() || `SUB-${Math.floor(100 + Math.random() * 900)}`,
       type: newType,
-      grade: "الثالث الثانوي",
+      grade: newGrade,
       section: newSection,
-      teacherName: newTeacher,
+      teacherName: teacherToAssign,
     };
-    setSubjects((prev) => [newEntry, ...prev]);
+
+    saveStoredSubject(newEntry);
+    setSubjects(getStoredSubjects());
     setIsAddModalOpen(false);
     setNewName("");
     setNewCode("");
-    showToast(`تمت إضافة مادة "${newEntry.name}" بنجاح!`);
+    showToast(`تمت إضافة مادة "${newEntry.name}" وإسنادها للأستاذ/ة "${teacherToAssign}" بنجاح!`);
   };
 
-  const handleOpenEdit = (sub: SubjectItem) => {
+  const handleOpenEdit = (sub: SubjectAssignment) => {
     setEditingSubject(sub);
     setEditName(sub.name);
     setEditCode(sub.code);
     setEditType(sub.type);
+    setEditGrade(sub.grade);
     setEditTeacher(sub.teacherName);
     setEditSection(sub.section);
   };
@@ -128,67 +119,62 @@ export default function AdminSubjectsPage() {
     e.preventDefault();
     if (!editingSubject || !editName.trim()) return;
 
-    setSubjects((prev) =>
-      prev.map((s) =>
-        s.id === editingSubject.id
-          ? {
-              ...s,
-              name: editName.trim(),
-              code: editCode.trim(),
-              type: editType,
-              teacherName: editTeacher,
-              section: editSection,
-            }
-          : s
-      )
-    );
-    showToast(`تم تعديل اسم وبيانات المادة إلى "${editName.trim()}" بنجاح!`);
+    const updated: SubjectAssignment = {
+      ...editingSubject,
+      name: editName.trim(),
+      code: editCode.trim(),
+      type: editType,
+      grade: editGrade,
+      teacherName: editTeacher,
+      section: editSection,
+    };
+
+    saveStoredSubject(updated);
+    setSubjects(getStoredSubjects());
+    showToast(`تم تعديل المادة وإسنادها إلى "${editTeacher}" بنجاح!`);
     setEditingSubject(null);
   };
 
   const handleDeleteSubject = (id: string, name: string) => {
     if (confirm(`هل أنت متأكد من حذف مقرر "${name}" نهائياً من النظام؟`)) {
-      setSubjects((prev) => prev.filter((s) => s.id !== id));
+      deleteStoredSubject(id);
+      setSubjects(getStoredSubjects());
       showToast(`تم حذف مقرر "${name}" بنجاح.`);
     }
   };
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
-      <AppHeader
-        user={admin}
-        onOpenSidebar={() => setIsSidebarOpen(true)}
-      />
-
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        user={admin}
-      />
+      <AppHeader user={admin} onOpenSidebar={() => setIsSidebarOpen(true)} />
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={admin} />
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <Link
-            href="/admin"
-            className="p-2 -mr-2 rounded-xl text-muted hover:text-foreground transition-colors"
-          >
-            <ChevronRight className="w-6 h-6" />
-          </Link>
-          <div className="text-center">
-            <h1 className="text-xl font-bold text-foreground">
-              المواد الدراسية وإسناد المعلمين
-            </h1>
-            <p className="text-xs text-brand-teal mt-0.5">
-              تعديل أسماء المقررات، الرموز، وإسناد الشعب والمعلمين
-            </p>
+        {/* Header Breadcrumb */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin"
+              className="p-2 -mr-2 rounded-xl text-muted hover:text-foreground transition-colors"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-black text-foreground flex items-center gap-2">
+                <BookOpen className="w-6 h-6 text-brand-cyan" />
+                المواد الدراسية وإسناد المعلمين
+              </h1>
+              <p className="text-xs text-muted">
+                إدارة المقررات، الرموز، وإسناد كل مادة للمعلم المعتمد والشعب الدراسية
+              </p>
+            </div>
           </div>
+
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-cyan text-background text-xs font-bold shadow-glow hover:opacity-90 transition-all"
+            className="px-4 py-2 rounded-xl bg-brand-cyan text-background text-xs font-bold shadow-glow hover:brightness-110 flex items-center justify-center gap-1.5 transition-all"
           >
             <PlusCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">إضافة مادة جديدة</span>
+            <span>إضافة مادة وإسناد معلم</span>
           </button>
         </div>
 
@@ -242,19 +228,18 @@ export default function AdminSubjectsPage() {
                   <div className="text-right">
                     <span className="flex items-center gap-1.5 text-foreground font-semibold">
                       <UserCheck className="w-3.5 h-3.5 text-brand-teal" />
-                      المعلم: {sub.teacherName}
+                      المعلم المسند: <strong className="text-brand-cyan">{sub.teacherName}</strong>
                     </span>
                     <span className="text-[11px] text-muted block mt-0.5">
                       الشعب: {sub.section}
                     </span>
                   </div>
 
-                  {/* Actions: Edit Name & Delete */}
                   <div className="flex items-center gap-1.5 pt-1 sm:pt-0">
                     <button
                       onClick={() => handleOpenEdit(sub)}
                       className="p-2 rounded-xl bg-surface-secondary hover:bg-brand-cyan/20 text-brand-cyan transition-colors"
-                      title="تعديل اسم وبيانات المادة"
+                      title="تعديل اسم وبيانات المادة أو إسناد معلم آخر"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
@@ -271,6 +256,8 @@ export default function AdminSubjectsPage() {
             ))}
           </div>
         </div>
+
+        <DeveloperFooter />
       </main>
 
       {/* Edit Subject Modal */}
@@ -280,7 +267,7 @@ export default function AdminSubjectsPage() {
             <div className="flex items-center justify-between pb-2 border-b border-border">
               <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-brand-cyan" />
-                تعديل اسم المادة وبياناتها
+                تعديل المادة وإسناد المعلم
               </h3>
               <button
                 onClick={() => setEditingSubject(null)}
@@ -293,15 +280,14 @@ export default function AdminSubjectsPage() {
             <form onSubmit={handleSaveEdit} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-foreground mb-1">
-                  اسم المادة (تعديل الاسم هنا)
+                  اسم المادة
                 </label>
                 <input
                   type="text"
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="اسم المادة الجديد..."
-                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan font-bold"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                 />
               </div>
 
@@ -320,7 +306,7 @@ export default function AdminSubjectsPage() {
                 </div>
                 <div>
                   <label className="block font-semibold text-foreground mb-1">
-                    تصنيف المادة
+                    نوع المادة
                   </label>
                   <select
                     value={editType}
@@ -333,30 +319,51 @@ export default function AdminSubjectsPage() {
                 </div>
               </div>
 
+              {/* Dynamic Teachers Dropdown */}
               <div>
                 <label className="block font-semibold text-foreground mb-1">
-                  المعلم المسند
+                  إسناد إلى معلم (يحتوي جميع المعلمين المضافين بالمنصة)
                 </label>
                 <select
                   value={editTeacher}
                   onChange={(e) => setEditTeacher(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                 >
-                  <option value="م. بلال الشميري">م. بلال الشميري</option>
-                  <option value="أ. فاطمة العولقي">أ. فاطمة العولقي</option>
+                  {teachersList.map((t) => (
+                    <option key={t.id} value={t.full_name}>
+                      {t.full_name} (@{t.username})
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  الشعبة المسندة
-                </label>
-                <input
-                  type="text"
-                  value={editSection}
-                  onChange={(e) => setEditSection(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    الصف الدراسي
+                  </label>
+                  <select
+                    value={editGrade}
+                    onChange={(e) => setEditGrade(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
+                  >
+                    {gradesList.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    الشعبة المسندة
+                  </label>
+                  <input
+                    type="text"
+                    value={editSection}
+                    onChange={(e) => setEditSection(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
@@ -384,9 +391,19 @@ export default function AdminSubjectsPage() {
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-surface p-6 rounded-3xl border border-border shadow-2xl max-w-md w-full space-y-4">
-            <h3 className="text-base font-bold text-foreground pb-2 border-b border-border">
-              إضافة مادة وإسناد المعلم
-            </h3>
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                <PlusCircle className="w-5 h-5 text-brand-cyan" />
+                إضافة مادة دراسية وإسنادها لمعلم
+              </h3>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1 rounded-xl text-muted hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
             <form onSubmit={handleAddSubject} className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-foreground mb-1">
@@ -395,12 +412,13 @@ export default function AdminSubjectsPage() {
                 <input
                   type="text"
                   required
-                  placeholder="مثال: أساسيات التشفير وأمن المعلومات"
+                  placeholder="مثال: فيزياء الحركة الموجية"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
                 />
               </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-semibold text-foreground mb-1">
@@ -408,7 +426,7 @@ export default function AdminSubjectsPage() {
                   </label>
                   <input
                     type="text"
-                    placeholder="SEC-305"
+                    placeholder="PHY-201"
                     value={newCode}
                     onChange={(e) => setNewCode(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
@@ -428,29 +446,56 @@ export default function AdminSubjectsPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Dynamic Teachers Dropdown: Reads all registered teachers! */}
               <div>
                 <label className="block font-semibold text-foreground mb-1">
-                  إسناد لمعلم
+                  إسناد لمعلم (جميع المعلمين المسجلين)
                 </label>
                 <select
                   value={newTeacher}
                   onChange={(e) => setNewTeacher(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                 >
-                  <option value="م. بلال الشميري">م. بلال الشميري</option>
-                  <option value="أ. فاطمة العولقي">أ. فاطمة العولقي</option>
+                  {teachersList.length === 0 ? (
+                    <option value="">لا يوجد معلمون مسجلون حالياً</option>
+                  ) : (
+                    teachersList.map((t) => (
+                      <option key={t.id} value={t.full_name}>
+                        {t.full_name} (@{t.username})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
-              <div>
-                <label className="block font-semibold text-foreground mb-1">
-                  الشعبة المستهدفة
-                </label>
-                <input
-                  type="text"
-                  value={newSection}
-                  onChange={(e) => setNewSection(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
-                />
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    الصف الدراسي
+                  </label>
+                  <select
+                    value={newGrade}
+                    onChange={(e) => setNewGrade(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
+                  >
+                    {gradesList.map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    الشعبة المستهدفة
+                  </label>
+                  <input
+                    type="text"
+                    value={newSection}
+                    onChange={(e) => setNewSection(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground focus:outline-none focus:border-brand-cyan"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
@@ -465,7 +510,7 @@ export default function AdminSubjectsPage() {
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-brand-cyan text-background font-bold shadow-glow"
                 >
-                  إنشاء المادة
+                  إنشاء المادة وإسنادها
                 </button>
               </div>
             </form>

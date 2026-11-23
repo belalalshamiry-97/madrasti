@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -21,6 +21,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
 import { MOCK_USERS } from "@/lib/mock-data";
+import { getStoredGrades, AcademicGrade } from "@/lib/academic-store";
 
 interface EnrolledStudent {
   id: string;
@@ -41,6 +42,15 @@ export default function AdminEnrollmentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [gradeFilter, setGradeFilter] = useState("ALL");
   const [sectionFilter, setSectionFilter] = useState("ALL");
+  const [gradesList, setGradesList] = useState<AcademicGrade[]>([]);
+
+  useEffect(() => {
+    const list = getStoredGrades();
+    setGradesList(list);
+    if (list.length > 0) {
+      setNewGrade(list[0].name);
+    }
+  }, []);
 
   const [students, setStudents] = useState<EnrolledStudent[]>([
     { id: "1", name: "عمر أحمد بافضل", username: "student1", grade: "الثالث الثانوي", track: "علمي", section: "الشعبة (أ)", phone: "777888999", enrollmentDate: "2026-09-01", status: "active" },
@@ -183,9 +193,9 @@ export default function AdminEnrollmentsPage() {
               className="w-full px-3 py-2.5 rounded-xl bg-surface border border-border text-foreground font-semibold focus:outline-none focus:border-brand-cyan"
             >
               <option value="ALL">جميع الصفوف الدراسية</option>
-              <option value="الثالث الثانوي">الثالث الثانوي</option>
-              <option value="الثاني الثانوي">الثاني الثانوي</option>
-              <option value="الأول الثانوي">الأول الثانوي</option>
+              {gradesList.map((g) => (
+                <option key={g.id} value={g.name}>{g.name}</option>
+              ))}
             </select>
           </div>
 
@@ -337,9 +347,9 @@ export default function AdminEnrollmentsPage() {
                     onChange={(e) => setNewGrade(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                   >
-                    <option value="الأول الثانوي">الأول الثانوي</option>
-                    <option value="الثاني الثانوي">الثاني الثانوي</option>
-                    <option value="الثالث الثانوي">الثالث الثانوي</option>
+                    {gradesList.map((g) => (
+                      <option key={g.id} value={g.name}>{g.name}</option>
+                    ))}
                   </select>
                 </div>
 

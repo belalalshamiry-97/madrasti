@@ -16,57 +16,46 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
-import { MOCK_USERS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
-import { getStoredSubjects, SubjectAssignment } from "@/lib/academic-store";
 import { getTeacherCoursesFromDB } from "@/lib/services/academic-service";
 
 export default function TeacherCoursesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [currentTeacher, setCurrentTeacher] = useState(MOCK_USERS.teacher1);
-  const [assignedCourses, setAssignedCourses] = useState<SubjectAssignment[]>([]);
+  const [currentTeacher, setCurrentTeacher] = useState<any>(null);
+  const [assignedCourses, setAssignedCourses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const active = getActiveUser("TEACHER");
-    setCurrentTeacher(active);
-
     async function loadCourses() {
+      const active = getActiveUser("TEACHER");
+      setCurrentTeacher(active);
+
       try {
-        const dbCourses = await getTeacherCoursesFromDB(active.id || active.username);
-        if (dbCourses && dbCourses.length > 0) {
+        const teacherId = active?.id || active?.username;
+        if (teacherId) {
+          const dbCourses = await getTeacherCoursesFromDB(teacherId);
           setAssignedCourses(
-            dbCourses.map((c: any) => ({
+            (dbCourses || []).map((c: any) => ({
               id: c.id,
               name: c.name,
               code: c.code,
               type: c.subject_type === "practical" ? "practical" : "theory",
               grade: c.grade,
               section: c.section,
-              teacherName: active.full_name,
+              semester: c.semester_name,
+              students_count: c.students_count || 0,
+              lessons_count: c.lessons_count || 0,
+              teacherName: active?.full_name || "",
             }))
           );
-          return;
+        } else {
+          setAssignedCourses([]);
         }
       } catch (err) {
-        console.warn("Falling back to local teacher courses:", err);
-      }
-
-      // Fallback
-      const all = getStoredSubjects();
-      const assigned = all.filter(
-        (s) =>
-          s.teacherName.toLowerCase().includes(active.full_name.toLowerCase()) ||
-          active.full_name.toLowerCase().includes(s.teacherName.toLowerCase())
-      );
-
-      if (assigned.length > 0) {
-        setAssignedCourses(assigned);
-      } else {
-        if (active.username === "teacher1" || active.full_name.includes("بلال")) {
-          setAssignedCourses(all.filter((s) => s.teacherName.includes("بلال")));
-        } else if (active.username === "teacher2" || active.full_name.includes("فاطمة")) {
-          setAssignedCourses(all.filter((s) => s.teacherName.includes("فاطمة")));
-        }
+        console.error("Error loading teacher courses from DB:", err);
+        setAssignedCourses([]);
+      } finally {
+        setIsLoading(false);
       }
     }
 
@@ -102,7 +91,11 @@ export default function TeacherCoursesPage() {
 
         {/* Courses Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {assignedCourses.length === 0 ? (
+          {isLoading ? (
+            <div className="col-span-2 p-12 text-center rounded-3xl bg-surface border border-border">
+              <p className="text-xs text-muted">جاري تحميل المقررات المسندة من قاعدة البيانات...</p>
+            </div>
+          ) : assignedCourses.length === 0 ? (
             <div className="col-span-2 p-12 text-center rounded-3xl bg-surface border border-border space-y-3">
               <BookOpen className="w-12 h-12 text-brand-teal mx-auto opacity-40" />
               <h3 className="text-base font-bold text-foreground">لا توجد مواد مسندة إليك حالياً</h3>

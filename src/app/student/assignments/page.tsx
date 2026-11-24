@@ -7,14 +7,13 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { MOCK_USERS, MOCK_ASSIGNMENTS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
 import { getAssignmentsForStudentFromDB } from "@/lib/services/assignments-service";
 
 export default function StudentAssignmentsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "late" | "pending">("all");
-  const [student, setStudent] = useState(MOCK_USERS.student1);
+  const [student, setStudent] = useState<any>(null);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -25,15 +24,16 @@ export default function StudentAssignmentsPage() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const dbAssignments = await getAssignmentsForStudentFromDB(active.id || active.username);
-        if (dbAssignments && dbAssignments.length > 0) {
-          setAssignments(dbAssignments);
+        const studentId = active?.id || active?.username;
+        if (studentId) {
+          const dbAssignments = await getAssignmentsForStudentFromDB(studentId);
+          setAssignments(dbAssignments || []);
         } else {
-          setAssignments(MOCK_ASSIGNMENTS);
+          setAssignments([]);
         }
       } catch (err) {
         console.error("Failed to load student assignments:", err);
-        setAssignments(MOCK_ASSIGNMENTS);
+        setAssignments([]);
       } finally {
         setIsLoading(false);
       }

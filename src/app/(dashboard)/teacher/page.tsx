@@ -21,38 +21,56 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { CourseCard } from "@/components/courses/CourseCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
-import { MOCK_USERS, MOCK_COURSES } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
-import { getStoredSubjects, SubjectAssignment } from "@/lib/academic-store";
-import { getSubmissionsForTeacher, AssignmentSubmission } from "@/lib/submission-store";
+import { getTeacherCoursesFromDB, getTeacherDashboardStatsFromDB } from "@/lib/services/academic-service";
+import { getTeacherSubmissionsFromDB } from "@/lib/services/assignments-service";
 
 export default function TeacherDashboardPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [teacher, setTeacher] = useState(MOCK_USERS.teacher1);
-  const [assignedSubjects, setAssignedSubjects] = useState<SubjectAssignment[]>([]);
-  const [pendingSubmissions, setPendingSubmissions] = useState<AssignmentSubmission[]>([]);
+  const [teacher, setTeacher] = useState<any>(null);
+  const [assignedCourses, setAssignedCourses] = useState<any[]>([]);
+  const [pendingSubmissions, setPendingSubmissions] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    assigned_subjects_count: 0,
+    total_students_count: 0,
+    published_lessons_count: 0,
+    pending_submissions_count: 0,
+  });
+  const [isLoading, setIsLoading] = useState(true);
 
   React.useEffect(() => {
-    const active = getActiveUser("TEACHER");
-    if (active.role === "TEACHER") setTeacher(active);
+    async function loadTeacherData() {
+      const active = getActiveUser("TEACHER");
+      setTeacher(active);
 
-    // Get subjects assigned to this active teacher
-    const allSubs = getStoredSubjects();
-    const assigned = allSubs.filter(
-      (s) =>
-        s.teacherName.toLowerCase().includes(active.full_name.toLowerCase()) ||
-        active.full_name.toLowerCase().includes(s.teacherName.toLowerCase())
-    );
-    setAssignedSubjects(assigned);
+      try {
+        const teacherKey = active?.id || active?.username;
+        if (teacherKey) {
+          const [dbCourses, dbStats, dbSubmissions] = await Promise.all([
+            getTeacherCoursesFromDB(teacherKey),
+            getTeacherDashboardStatsFromDB(teacherKey),
+            getTeacherSubmissionsFromDB(teacherKey),
+          ]);
 
-    // Get pending submissions strictly for this teacher's courses
-    const subs = getSubmissionsForTeacher(active.full_name, active.username);
-    setPendingSubmissions(
-      subs.filter((s) => s.status === "submitted" || s.status === "late")
-    );
+          setAssignedCourses(dbCourses || []);
+          setStats(dbStats);
+
+          const pending = (dbSubmissions || []).filter(
+            (s: any) => s.status === "submitted" || s.status === "late"
+          );
+          setPendingSubmissions(pending);
+        }
+      } catch (err) {
+        console.error("Error loading teacher dashboard data:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadTeacherData();
   }, []);
 
-  const primaryCourseId = "80000000-0000-0000-0000-000000000001";
+  const primaryCourseId = assignedCourses.length > 0 ? assignedCourses[0].id : null;
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
@@ -81,17 +99,17 @@ export default function TeacherDashboardPage() {
                 </span>
               </div>
               <h1 className="text-xl sm:text-2xl font-black text-foreground">
-                أهلاً بك، {teacher.full_name} 👨‍🏫
+                أهلاً بك، {teacher?.full_name || "المعلم"} 👨‍🏫
               </h1>
               <p className="text-sm text-muted mt-1">
-                لديك {pendingSubmissions.length} تسليمات جديدة تنتظر المراجعة والتصحيح اليوم.
+                لديك {stats.pending_submissions_count} تسليمات جديدة تنتظر المراجعة والتصحيح اليوم.
               </p>
             </div>
 
             {/* Quick Actions */}
             <div className="flex flex-wrap gap-2">
               <Link
-                href={`/teacher/courses/${primaryCourseId}/lessons/new`}
+                href={primaryCourseId ? `/teacher/courses/${primaryCourseId}/lessons/new` : "/teacher/courses"}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-cyan text-background text-xs font-bold hover:opacity-90 shadow-glow transition-all"
               >
                 <PlusCircle className="w-4 h-4" />
@@ -134,22 +152,22 @@ export default function TeacherDashboardPage() {
           <div className="bg-surface p-4 rounded-2xl border border-border">
             <span className="text-xs text-muted block mb-1">المواد المسندة</span>
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black text-foreground">3</span>
+              <span className="text-2xl font-black text-foreground">{stats.assigned_subjects_count}</span>
               <BookOpen className="w-5 h-5 text-brand-cyan" />
             </div>
             <span className="text-[11px] text-muted mt-1 block">
-              في شعبة (أ) و (ب)
+              مواد وشعب معتمدة
             </span>
           </div>
 
           <div className="bg-surface p-4 rounded-2xl border border-border">
             <span className="text-xs text-muted block mb-1">إجمالي الطلاب</span>
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black text-foreground">60</span>
+              <span className="text-2xl font-black text-foreground">{stats.total_students_count}</span>
               <Users className="w-5 h-5 text-brand-teal" />
             </div>
             <span className="text-[11px] text-brand-teal mt-1 block">
-              طلاب منتظمون
+              في الشعب المسندة
             </span>
           </div>
 
@@ -157,7 +175,7 @@ export default function TeacherDashboardPage() {
             <span className="text-xs text-muted block mb-1">بانتظار التصحيح</span>
             <div className="flex items-baseline justify-between">
               <span className="text-2xl font-black text-status-warning">
-                {pendingSubmissions.length}
+                {stats.pending_submissions_count}
               </span>
               <CheckSquare className="w-5 h-5 text-status-warning" />
             </div>
@@ -169,11 +187,11 @@ export default function TeacherDashboardPage() {
           <div className="bg-surface p-4 rounded-2xl border border-border">
             <span className="text-xs text-muted block mb-1">الدروس المنشورة</span>
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black text-foreground">13</span>
+              <span className="text-2xl font-black text-foreground">{stats.published_lessons_count}</span>
               <Clock className="w-5 h-5 text-brand-cyan" />
             </div>
             <span className="text-[11px] text-brand-cyan mt-1 block">
-              4 دروس في إدارة الشبكات
+              دروس منشورة للطلاب
             </span>
           </div>
         </section>
@@ -194,12 +212,16 @@ export default function TeacherDashboardPage() {
             </div>
 
             <div className="space-y-3">
-              {assignedSubjects.length === 0 ? (
+              {isLoading ? (
+                <div className="p-8 rounded-3xl bg-surface border border-border text-center text-muted text-xs">
+                  جاري جلب بيانات المواد والشعب من قاعدة البيانات...
+                </div>
+              ) : assignedCourses.length === 0 ? (
                 <div className="p-8 rounded-3xl bg-surface border border-border text-center text-muted text-xs">
                   لم يتم إسناد مواد دراسية لك بعد. يرجى مراجعة إدارة المدرسة لإسناد المواد وشعب التدريس.
                 </div>
               ) : (
-                assignedSubjects.map((subject) => (
+                assignedCourses.map((subject) => (
                   <div
                     key={subject.id}
                     className="p-5 rounded-3xl bg-surface border border-border hover:border-brand-teal/40 transition-all shadow-card space-y-3"
@@ -220,26 +242,26 @@ export default function TeacherDashboardPage() {
                       </div>
 
                       <StatusBadge
-                        type={subject.type === "theory" ? "theory" : "practical"}
-                        label={subject.type === "theory" ? "نظري" : "عملي"}
+                        type={subject.subject_type === "theory" ? "theory" : "practical"}
+                        label={subject.subject_type === "theory" ? "نظري" : "عملي"}
                       />
                     </div>
 
                     <div className="pt-3 border-t border-border/60 flex items-center justify-between">
                       <span className="text-xs text-muted">
-                        الفصل الدراسي الأول • 20261
+                        {subject.semester_name || "الفصل الدراسي الحالي"}
                       </span>
 
                       <div className="flex items-center gap-2">
                         <Link
-                          href={`/teacher/courses/${primaryCourseId}/lessons`}
+                          href={`/teacher/courses/${subject.id}/lessons`}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-secondary hover:bg-surface border border-border text-xs font-semibold text-foreground transition-colors"
                         >
                           <FileText className="w-3.5 h-3.5 text-brand-teal" />
                           إدارة الدروس
                         </Link>
                         <Link
-                          href={`/teacher/courses/${primaryCourseId}/lessons/new`}
+                          href={`/teacher/courses/${subject.id}/lessons/new`}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-teal/20 hover:bg-brand-teal/30 text-brand-teal text-xs font-bold transition-colors"
                         >
                           <PlusCircle className="w-3.5 h-3.5" />
@@ -252,6 +274,7 @@ export default function TeacherDashboardPage() {
               )}
             </div>
           </section>
+
 
           {/* Pending Submissions Queue */}
           <section className="space-y-4">
@@ -270,31 +293,37 @@ export default function TeacherDashboardPage() {
               </div>
 
               <div className="space-y-3">
-                {pendingSubmissions.map((sub) => (
-                  <div
-                    key={sub.id}
-                    className="p-3.5 rounded-2xl bg-surface-secondary/70 border border-border space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-foreground">
-                        {sub.student_name}
-                      </span>
-                      <StatusBadge type="pending" label="تسليم جديد" />
+                {pendingSubmissions.length === 0 ? (
+                  <p className="text-xs text-muted text-center py-6">
+                    لا توجد تسليمات جديدة تنتظر التصحيح حالياً.
+                  </p>
+                ) : (
+                  pendingSubmissions.map((sub) => (
+                    <div
+                      key={sub.id}
+                      className="p-3.5 rounded-2xl bg-surface-secondary/70 border border-border space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-foreground">
+                          {sub.student_name}
+                        </span>
+                        <StatusBadge type="pending" label="تسليم جديد" />
+                      </div>
+                      <p className="text-[11px] text-muted">
+                        {sub.assignment_title} ({sub.course_name})
+                      </p>
+                      <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[10px] text-muted">
+                        <span>{sub.submitted_at}</span>
+                        <Link
+                          href={`/teacher/grading/${sub.id}`}
+                          className="text-brand-cyan hover:underline font-bold"
+                        >
+                          بدء التصحيح &larr;
+                        </Link>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-muted">
-                      {sub.assignment_title} ({sub.course_name})
-                    </p>
-                    <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[10px] text-muted">
-                      <span>{sub.submitted_at}</span>
-                      <Link
-                        href={`/teacher/grading/${sub.id}`}
-                        className="text-brand-cyan hover:underline font-bold"
-                      >
-                        بدء التصحيح &larr;
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </section>

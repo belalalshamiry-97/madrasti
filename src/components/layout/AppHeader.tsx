@@ -18,7 +18,7 @@ import { setSessionRole, clearSession } from "@/lib/auth-actions";
 import { getSchoolInfo } from "@/lib/school-store";
 
 interface AppHeaderProps {
-  user: Profile;
+  user?: Profile | null;
   onOpenSidebar: () => void;
 }
 
@@ -43,7 +43,7 @@ export function AppHeader({ user, onOpenSidebar }: AppHeaderProps) {
 
   const handleRoleSwitch = async (role: UserRole) => {
     // Only admins are permitted to switch views for auditing/preview
-    if (user.role !== "ADMIN" && role === "ADMIN") return;
+    if (user?.role !== "ADMIN" && role === "ADMIN") return;
 
     await setSessionRole(role);
     setIsDropdownOpen(false);
@@ -59,16 +59,22 @@ export function AppHeader({ user, onOpenSidebar }: AppHeaderProps) {
     router.refresh();
   };
 
-  const getRoleLabel = (role: UserRole) => {
+  const getRoleLabel = (role?: UserRole) => {
     switch (role) {
       case "ADMIN":
         return "مدير المدرسة";
       case "TEACHER":
         return "معلم";
       case "STUDENT":
+      default:
         return "طالب";
     }
   };
+
+  const fullName = user?.full_name || "مستخدم";
+  const userInitial = fullName.slice(0, 1) || "م";
+  const userRole = user?.role || "STUDENT";
+  const username = user?.username || "";
 
   return (
     <header className="sticky top-0 z-40 w-full bg-background/95 backdrop-blur border-b border-border">
@@ -122,14 +128,14 @@ export function AppHeader({ user, onOpenSidebar }: AppHeaderProps) {
               className="flex items-center gap-2 p-1.5 pr-2.5 rounded-xl bg-surface hover:bg-surface-secondary border border-border transition-colors text-right"
             >
               <div className="w-8 h-8 rounded-lg bg-surface-secondary border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-bold text-sm">
-                {user.full_name.slice(0, 1)}
+                {userInitial}
               </div>
               <div className="hidden sm:block text-right">
                 <span className="block text-xs font-semibold text-foreground max-w-[120px] truncate">
-                  {user.full_name}
+                  {fullName}
                 </span>
                 <span className="block text-[10px] text-brand-cyan">
-                  {getRoleLabel(user.role)}
+                  {getRoleLabel(userRole)}
                 </span>
               </div>
               <ChevronDown className="w-4 h-4 text-muted" />
@@ -140,15 +146,15 @@ export function AppHeader({ user, onOpenSidebar }: AppHeaderProps) {
                 <div className="px-4 py-2 border-b border-border">
                   <p className="text-xs text-muted">الحساب الحالي:</p>
                   <p className="text-sm font-bold text-foreground truncate">
-                    {user.full_name}
+                    {fullName}
                   </p>
                   <p className="text-xs text-brand-cyan">
-                    {getRoleLabel(user.role)} ({user.username})
+                    {getRoleLabel(userRole)} {username ? `(${username})` : ""}
                   </p>
                 </div>
 
                 {/* Only display Admin options IF the current user is an authenticated ADMIN */}
-                {user.role === "ADMIN" && (
+                {userRole === "ADMIN" && (
                   <div className="py-1 border-b border-border">
                     <p className="px-4 py-1 text-[11px] font-semibold text-status-warning">
                       صلاحيات الإدارة:

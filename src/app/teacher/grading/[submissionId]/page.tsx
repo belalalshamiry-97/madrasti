@@ -22,7 +22,6 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { PDFViewerModal } from "@/components/lessons/PDFViewerModal";
-import { MOCK_USERS } from "@/lib/mock-data";
 import { formatBytes } from "@/lib/storage";
 import { getActiveUser } from "@/lib/user-store";
 import {
@@ -35,7 +34,7 @@ import { gradeSubmissionInDB, getTeacherSubmissionsFromDB } from "@/lib/services
 export default function SubmissionGradingPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [teacher, setTeacher] = useState(MOCK_USERS.teacher1);
+  const [teacher, setTeacher] = useState<any>(null);
   const params = useParams();
   const submissionId = params?.submissionId as string;
 

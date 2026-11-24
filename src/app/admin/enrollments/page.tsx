@@ -15,6 +15,8 @@ import {
   Phone,
   X,
   Filter,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -83,12 +85,14 @@ export default function AdminEnrollmentsPage() {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newUsername, setNewUsername] = useState("");
-  const [newPassword, setNewPassword] = useState("123");
+  const [newPassword, setNewPassword] = useState("123456");
   const [newGrade, setNewGrade] = useState("الأول الثانوي");
   const [newTrack, setNewTrack] = useState("عام");
   const [newSection, setNewSection] = useState("الشعبة (أ)");
   const [newPhone, setNewPhone] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -97,32 +101,39 @@ export default function AdminEnrollmentsPage() {
 
   const handleRegisterStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || !newUsername.trim()) return;
+    setModalError(null);
+
+    if (!newName.trim() || !newUsername.trim()) {
+      setModalError("يرجى إدخال اسم الطالب واسم المستخدم/رقم القيد.");
+      return;
+    }
 
     const cleanUsername = newUsername.trim().toLowerCase();
     const cleanPwd = newPassword.trim() || "123456";
 
     if (cleanPwd.length < 6) {
-      showToast("كلمة المرور يجب ألا تقل عن 6 أحرف في Supabase.");
+      setModalError("كلمة المرور قصيرة: تشترط منصة Supabase كلمة مرور من 6 خانات أو أحرف على الأقل.");
       return;
     }
 
-    // 1. Create student in Supabase Auth & public.profiles
-    const result = await createUserInDB({
-      full_name: newName.trim(),
-      username: cleanUsername,
-      password: cleanPwd,
-      role: "STUDENT",
-      grade: newGrade,
-      section: newSection,
-      phone: newPhone.trim() || "770000000",
-      status: "active",
-    });
+    setIsSubmitting(true);
+    try {
+      // 1. Create student in Supabase Auth & public.profiles
+      const result = await createUserInDB({
+        full_name: newName.trim(),
+        username: cleanUsername,
+        password: cleanPwd,
+        role: "STUDENT",
+        grade: newGrade,
+        section: newSection,
+        phone: newPhone.trim() || "770000000",
+        status: "active",
+      });
 
-    if (!result.success) {
-      showToast(result.error || "فشل تسجيل الطالب في قاعدة البيانات.");
-      return;
-    }
+      if (!result.success) {
+        setModalError(result.error || "فشل تسجيل الطالب في قاعدة البيانات.");
+        return;
+      }
 
     // 2. Add to enrollment directory
     const newStudent: EnrolledStudent = {
@@ -145,14 +156,20 @@ export default function AdminEnrollmentsPage() {
       return updated;
     });
 
-    setIsRegisterModalOpen(false);
-    setNewName("");
-    setNewUsername("");
-    setNewPassword("123456");
-    setNewPhone("");
-    showToast(
-      `✅ تم تسجيل وحفظ الطالب "${newStudent.name}" في Supabase بنجاح! اسم الدخول: (${newStudent.username}) • كلمة المرور: (${cleanPwd})`
-    );
+      setIsRegisterModalOpen(false);
+      setModalError(null);
+      setNewName("");
+      setNewUsername("");
+      setNewPassword("123456");
+      setNewPhone("");
+      showToast(
+        `✅ تم تسجيل وحفظ الطالب "${newStudent.name}" في Supabase بنجاح! اسم الدخول: (${newStudent.username}) • كلمة المرور: (${cleanPwd})`
+      );
+    } catch (err: any) {
+      setModalError(err.message || "حدث خطأ غير متوقع أثناء تسجيل الطالب.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReassign = (id: string) => {
@@ -342,12 +359,22 @@ export default function AdminEnrollmentsPage() {
                 </h3>
               </div>
               <button
-                onClick={() => setIsRegisterModalOpen(false)}
+                onClick={() => {
+                  setIsRegisterModalOpen(false);
+                  setModalError(null);
+                }}
                 className="p-1 rounded-xl text-muted hover:text-foreground"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {modalError && (
+              <div className="p-3 rounded-2xl bg-status-danger/15 border border-status-danger/30 text-status-danger text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleRegisterStudent} className="space-y-3.5 text-xs">
               <div>
@@ -382,14 +409,18 @@ export default function AdminEnrollmentsPage() {
 
                 <div>
                   <label className="block font-semibold text-foreground mb-1">
-                    كلمة مرور الدخول للمنصة
+                    كلمة مرور الدخول للمنصة (6 خانات أو أكثر)
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="123"
+                    minLength={6}
+                    placeholder="123456"
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      if (modalError) setModalError(null);
+                    }}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-mono focus:outline-none focus:border-brand-cyan"
                     dir="ltr"
                   />
@@ -468,9 +499,17 @@ export default function AdminEnrollmentsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-brand-cyan text-background font-bold shadow-glow"
+                  disabled={isSubmitting}
+                  className="px-5 py-2.5 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center justify-center gap-1.5 shadow-glow hover:brightness-110 transition-all disabled:opacity-50"
                 >
-                  تأكيد قيد الطالب
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري القيد والتسجيل في Supabase...</span>
+                    </>
+                  ) : (
+                    <span>تأكيد قيد الطالب</span>
+                  )}
                 </button>
               </div>
             </form>

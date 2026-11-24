@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
@@ -144,6 +144,26 @@ export async function getLessonDetailsFromDB(lessonId: string, studentId?: strin
 }
 
 /**
+ * Get next available lesson number for a course
+ */
+export async function getNextLessonNumberFromDB(classSubjectId: string): Promise<number> {
+  try {
+    const admin = createAdminClient();
+    const { data: maxRow } = await admin
+      .from("lessons")
+      .select("lesson_number")
+      .eq("class_subject_id", classSubjectId)
+      .order("lesson_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return (maxRow?.lesson_number || 0) + 1;
+  } catch {
+    return 1;
+  }
+}
+
+/**
  * Create a new lesson and its materials in Supabase
  */
 export async function createLessonInDB(input: CreateLessonInput): Promise<{
@@ -154,14 +174,19 @@ export async function createLessonInDB(input: CreateLessonInput): Promise<{
   try {
     const admin = createAdminClient();
 
-    // 1. Determine next lesson number if not provided
+    // 1. Determine next lesson number safely to prevent collision on UNIQUE(class_subject_id, lesson_number)
     let lessonNum = input.lesson_number;
-    if (!lessonNum) {
-      const { count } = await admin
-        .from("lessons")
-        .select("*", { count: "exact", head: true })
-        .eq("class_subject_id", input.class_subject_id);
-      lessonNum = (count || 0) + 1;
+    const { data: maxRow } = await admin
+      .from("lessons")
+      .select("lesson_number")
+      .eq("class_subject_id", input.class_subject_id)
+      .order("lesson_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const maxExisting = maxRow?.lesson_number || 0;
+    if (!lessonNum || lessonNum <= maxExisting) {
+      lessonNum = maxExisting + 1;
     }
 
     // 2. Insert lesson

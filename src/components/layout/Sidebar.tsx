@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  user: Profile;
+  user?: Profile | null;
 }
 
 export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
@@ -171,11 +171,14 @@ export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
     { label: "الإعدادات", href: "/settings", icon: Settings },
   ];
 
+  const userRole = user?.role || "STUDENT";
+  const userFullName = user?.full_name || "مستخدم";
+
   // Select items based on user role
   const menuItems =
-    user.role === "ADMIN"
+    userRole === "ADMIN"
       ? adminMenuItems
-      : user.role === "TEACHER"
+      : userRole === "TEACHER"
       ? teacherMenuItems
       : studentMenuItems;
 
@@ -197,14 +200,14 @@ export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
             <div
               className={cn(
                 "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-background shadow-glow",
-                user.role === "ADMIN"
+                userRole === "ADMIN"
                   ? "bg-gradient-to-tr from-amber-500 to-status-warning text-black"
-                  : user.role === "TEACHER"
+                  : userRole === "TEACHER"
                   ? "bg-gradient-to-tr from-brand-teal to-emerald-400"
                   : "bg-gradient-to-tr from-brand-blue to-brand-cyan"
               )}
             >
-              {user.role === "ADMIN" ? (
+              {userRole === "ADMIN" ? (
                 <Shield className="w-6 h-6" />
               ) : (
                 <GraduationCap className="w-6 h-6" />
@@ -215,12 +218,12 @@ export function Sidebar({ isOpen, onClose, user }: SidebarProps) {
                 {schoolTitle}
               </h3>
               <p className="text-xs font-semibold text-brand-cyan">
-                {user.full_name}
+                {userFullName}
               </p>
               <span className="text-[10px] text-muted block mt-0.5">
-                {user.role === "ADMIN"
+                {userRole === "ADMIN"
                   ? "مدير المدرسة • صلاحية كاملة"
-                  : user.role === "TEACHER"
+                  : userRole === "TEACHER"
                   ? "معلم معتمد • الكادر التعليمي"
                   : "طالب نظامي"}
               </span>

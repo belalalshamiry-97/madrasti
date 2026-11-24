@@ -21,6 +21,8 @@ import {
   EyeOff,
   Edit2,
   Key,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -106,10 +108,11 @@ export default function AdminUsersPermissionsPage() {
   ]);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   const handleTogglePermissionInNew = (permId: string) => {
@@ -147,15 +150,20 @@ export default function AdminUsersPermissionsPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFullName.trim() || !newUsername.trim()) return;
+    setModalError(null);
+
+    if (!newFullName.trim() || !newUsername.trim()) {
+      setModalError("يرجى إدخال الاسم الرباعي واسم المستخدم.");
+      return;
+    }
 
     if (!newPassword.trim()) {
-      showToast("يرجى إدخال كلمة المرور للمستخدم.");
+      setModalError("يرجى إدخال كلمة المرور الأولية للحساب.");
       return;
     }
 
     if (newPassword.trim().length < 6) {
-      showToast("كلمة المرور يجب ألا تقل عن 6 أحرف في Supabase.");
+      setModalError("كلمة المرور قصيرة جداً: تشترط منصة Supabase أن تتكون كلمة المرور من 6 خانات أو أحرف على الأقل.");
       return;
     }
 
@@ -163,37 +171,43 @@ export default function AdminUsersPermissionsPage() {
 
     // Check if username already exists
     if (usersList.some((u) => u.username.toLowerCase() === cleanUsername)) {
-      showToast("اسم المستخدم هذا مسجل مسبقاً، يرجى اختيار اسم مستخدم آخر.");
+      setModalError("اسم المستخدم هذا مسجل مسبقاً، يرجى اختيار اسم مستخدم آخر.");
       return;
     }
 
     setIsSubmitting(true);
-    const result = await createUserInDB({
-      full_name: newFullName.trim(),
-      username: cleanUsername,
-      password: newPassword.trim(),
-      role: newRole,
-      phone: newPhone.trim() || "770000000",
-      grade: newRole === "STUDENT" ? "الثالث الثانوي" : undefined,
-      section: newRole === "STUDENT" ? "الشعبة (أ)" : undefined,
-      permissions: newRole === "ADMIN" ? SYSTEM_PERMISSIONS.map((p) => p.id) : newSelectedPermissions,
-      status: "active",
-    });
-    setIsSubmitting(false);
+    try {
+      const result = await createUserInDB({
+        full_name: newFullName.trim(),
+        username: cleanUsername,
+        password: newPassword.trim(),
+        role: newRole,
+        phone: newPhone.trim() || "770000000",
+        grade: newRole === "STUDENT" ? "الثالث الثانوي" : undefined,
+        section: newRole === "STUDENT" ? "الشعبة (أ)" : undefined,
+        permissions: newRole === "ADMIN" ? SYSTEM_PERMISSIONS.map((p) => p.id) : newSelectedPermissions,
+        status: "active",
+      });
 
-    if (!result.success) {
-      showToast(result.error || "فشل إنشاء المستخدم في قاعدة البيانات.");
-      return;
+      if (!result.success) {
+        setModalError(result.error || "فشل إنشاء المستخدم في قاعدة البيانات.");
+        return;
+      }
+
+      await loadUsers();
+      setIsAddModalOpen(false);
+      setModalError(null);
+      setNewFullName("");
+      setNewUsername("");
+      setNewPassword("");
+      setNewPhone("");
+      setNewSelectedPermissions(["view_attendance", "manage_grades"]);
+      showToast(`✅ تم إنشاء المستخدم "${result.user?.full_name}" بنجاح وحفظه في Supabase!`);
+    } catch (err: any) {
+      setModalError(err.message || "حدث خطأ غير متوقع أثناء حفظ المستخدم.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    await loadUsers();
-    setIsAddModalOpen(false);
-    setNewFullName("");
-    setNewUsername("");
-    setNewPassword("");
-    setNewPhone("");
-    setNewSelectedPermissions(["view_attendance", "manage_grades"]);
-    showToast(`✅ تم إنشاء المستخدم "${result.user?.full_name}" بنجاح وحفظه في Supabase!`);
   };
 
   const filteredUsers = usersList.filter((u) => {
@@ -580,12 +594,22 @@ export default function AdminUsersPermissionsPage() {
                 إضافة مستخدم جديد وتعيين كلمة المرور
               </h3>
               <button
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setModalError(null);
+                }}
                 className="p-1 rounded-xl text-muted hover:text-foreground"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {modalError && (
+              <div className="p-3 rounded-2xl bg-status-danger/15 border border-status-danger/30 text-status-danger text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleCreateUser} className="space-y-3 text-xs">
               <div>
@@ -636,15 +660,19 @@ export default function AdminUsersPermissionsPage() {
               {/* Password Field - Clear & Explicit */}
               <div>
                 <label className="block font-semibold text-foreground mb-1">
-                  تعيين كلمة المرور الأولية للحساب
+                  تعيين كلمة المرور الأولية للحساب (6 خانات أو أكثر)
                 </label>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
                     required
-                    placeholder="اكتب كلمة مرور قوية للمستخدم..."
+                    minLength={6}
+                    placeholder="اكتب 6 أحرف أو أرقام على الأقل..."
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      if (modalError) setModalError(null);
+                    }}
                     className="w-full pr-3 pl-10 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-mono focus:outline-none focus:border-brand-cyan"
                     dir="ltr"
                   />
@@ -657,7 +685,7 @@ export default function AdminUsersPermissionsPage() {
                   </button>
                 </div>
                 <span className="text-[10px] text-muted block mt-1">
-                  * سيستخدم المستخدم كلمة المرور هذه لتسجيل الدخول من شاشة تسجيل الدخول.
+                  * متطلب أمني: كلمة المرور في Supabase يجب ألا تقل عن 6 أحرف/أرقام.
                 </span>
               </div>
 
@@ -718,9 +746,17 @@ export default function AdminUsersPermissionsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-brand-cyan text-background font-bold shadow-glow"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center justify-center gap-1.5 shadow-glow hover:brightness-110 transition-all disabled:opacity-50"
                 >
-                  حفظ المستخدم وتعيين كلمة المرور
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري الحفظ في قاعدة البيانات...</span>
+                    </>
+                  ) : (
+                    <span>حفظ المستخدم وتعيين كلمة المرور</span>
+                  )}
                 </button>
               </div>
             </form>

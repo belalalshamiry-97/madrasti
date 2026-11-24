@@ -24,7 +24,6 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { GradeBadge } from "@/components/common/GradeBadge";
-import { MOCK_USERS, MOCK_ASSIGNMENTS } from "@/lib/mock-data";
 import { validateFile, formatBytes } from "@/lib/storage";
 import { getActiveUser } from "@/lib/user-store";
 import {
@@ -35,13 +34,12 @@ import {
 export default function StudentAssignmentDetailsPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [student, setStudent] = useState(MOCK_USERS.student1);
+  const [student, setStudent] = useState<any>(null);
   const params = useParams();
   const assignmentId = params?.id as string;
 
-  const [assignment, setAssignment] = useState<any>(
-    MOCK_ASSIGNMENTS.find((a) => a.id === assignmentId) || MOCK_ASSIGNMENTS[0]
-  );
+  const [assignment, setAssignment] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [existingSubmission, setExistingSubmission] = useState<any | null>(null);
   const [answerText, setAnswerText] = useState("");
@@ -76,6 +74,8 @@ export default function StudentAssignmentDetailsPage() {
         }
       } catch (err) {
         console.error("Error loading assignment from DB:", err);
+      } finally {
+        setIsLoading(false);
       }
     }
     loadData();
@@ -196,20 +196,38 @@ export default function StudentAssignmentDetailsPage() {
               تفاصيل التكليف وتسليم الحل
             </h1>
             <p className="text-xs text-brand-cyan mt-0.5">
-              {assignment.course_name}
+              {assignment?.course_name || ""}
             </p>
           </div>
           <div className="w-6" />
         </div>
 
-        {/* Hero Card */}
-        <div className="p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-brand-cyan font-bold">
-                  {assignment.course_name}
-                </span>
+        {isLoading ? (
+          <div className="p-12 text-center rounded-3xl bg-surface border border-border">
+            <p className="text-xs text-muted">جاري تحميل بيانات التكليف من قاعدة البيانات...</p>
+          </div>
+        ) : !assignment ? (
+          <div className="p-12 text-center rounded-3xl bg-surface border border-border space-y-3">
+            <FileText className="w-12 h-12 text-muted mx-auto opacity-40" />
+            <h3 className="text-base font-bold text-foreground">التكليف غير متوفر</h3>
+            <p className="text-xs text-muted">لم يتم العثور على هذا التكليف في قاعدة البيانات أو تم حذفه.</p>
+            <Link
+              href="/student/assignments"
+              className="inline-block mt-2 px-4 py-2 rounded-xl bg-brand-cyan text-background text-xs font-bold"
+            >
+              العودة إلى قائمة التكاليف
+            </Link>
+          </div>
+        ) : (
+          <>
+            {/* Hero Card */}
+            <div className="p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-brand-cyan font-bold">
+                      {assignment.course_name}
+                    </span>
                 <span className="text-muted text-xs">•</span>
                 <span className="text-xs text-muted">م. بلال الشميري</span>
               </div>
@@ -435,6 +453,8 @@ export default function StudentAssignmentDetailsPage() {
             </div>
           )}
         </form>
+        </>
+        )}
       </main>
 
       <BottomNavigation user={student} />

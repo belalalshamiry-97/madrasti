@@ -7,35 +7,50 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { CourseCard } from "@/components/courses/CourseCard";
-import { MOCK_USERS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
-import { getSubjectsForGrade, SubjectAssignment } from "@/lib/academic-store";
+import { getStudentCoursesFromDB } from "@/lib/services/academic-service";
 
 export default function StudentCoursesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [student, setStudent] = useState(MOCK_USERS.student1);
-  const [studentSubjects, setStudentSubjects] = useState<SubjectAssignment[]>([]);
+  const [student, setStudent] = useState<any>(null);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const active = getActiveUser("STUDENT");
-    setStudent(active);
+    async function loadCourses() {
+      const active = getActiveUser("STUDENT");
+      setStudent(active);
 
-    const grade = active.grade || "الثالث الثانوي";
-    const subjects = getSubjectsForGrade(grade);
-    setStudentSubjects(subjects);
+      try {
+        const studentId = active?.id || active?.username;
+        if (studentId) {
+          const dbCourses = await getStudentCoursesFromDB(studentId);
+          setCourses(dbCourses || []);
+        } else {
+          setCourses([]);
+        }
+      } catch (err) {
+        console.error("Error loading student courses from DB:", err);
+        setCourses([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadCourses();
   }, []);
 
-  const studentCourses = studentSubjects.map((s) => ({
-    id: `80000000-0000-0000-0000-000000000001`,
-    section_id: `sec-${s.grade}`,
-    subject_id: s.id,
-    teacher_id: `t-${s.teacherName}`,
+  const studentCourses = courses.map((s) => ({
+    id: s.id,
+    section_id: s.section,
+    subject_id: s.code,
+    teacher_id: s.teacher_name,
     semester_id: "20261",
     subject: {
       id: s.id,
       name: s.name,
       code: s.code,
-      subject_type: s.type,
+      subject_type: s.subject_type || "theory",
       icon_name: s.name.includes("شبكات")
         ? "Network"
         : s.name.includes("أمنية")
@@ -45,17 +60,17 @@ export default function StudentCoursesPage() {
         : "Calculator",
     },
     teacher: {
-      id: `t-${s.teacherName}`,
+      id: `t-${s.teacher_name}`,
       role: "TEACHER" as const,
-      full_name: s.teacherName,
-      username: s.teacherName.replace(/\s+/g, ""),
+      full_name: s.teacher_name,
+      username: (s.teacher_name || "").replace(/\s+/g, ""),
       is_active: true,
       created_at: "2026-09-01T00:00:00Z",
       updated_at: "2026-09-01T00:00:00Z",
     },
-    lessons_count: 4,
-    assignments_count: 3,
-    progress_percentage: 75,
+    lessons_count: s.lessons_count || 0,
+    assignments_count: 0,
+    progress_percentage: 0,
   }));
 
   return (
@@ -83,7 +98,7 @@ export default function StudentCoursesPage() {
           <div className="text-center">
             <h1 className="text-xl font-bold text-foreground">مقرراتي الدراسية</h1>
             <p className="text-xs text-brand-cyan mt-0.5">
-              {student.grade || "الثالث الثانوي"} • {student.section || "الشعبة (أ)"}
+              {student?.grade || "المرحلة الثانوية"} {student?.section ? `• ${student.section}` : ""}
             </p>
           </div>
           <div className="w-6" />
@@ -98,15 +113,19 @@ export default function StudentCoursesPage() {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-muted">
             <Layers className="w-3.5 h-3.5 text-brand-teal" />
-            <span>عدد المواد المسندة لصفك: <strong>{studentCourses.length}</strong></span>
+            <span>عدد المواد المسندة لشعبتك: <strong>{studentCourses.length}</strong></span>
           </div>
         </div>
 
         {/* Courses Cards List */}
         <div className="space-y-3">
-          {studentCourses.length === 0 ? (
+          {isLoading ? (
             <div className="p-8 rounded-3xl bg-surface border border-border text-center text-muted text-xs">
-              لا توجد مقررات دراسية مسندة لصفك الدراسي حالياً. يرجى مراجعة إدارة المدرسة.
+              جاري تحميل المقررات المسندة لشعبتك الدراسية من قاعدة البيانات...
+            </div>
+          ) : studentCourses.length === 0 ? (
+            <div className="p-8 rounded-3xl bg-surface border border-border text-center text-muted text-xs">
+              لا توجد مقررات دراسية مسندة لشعبتك الدراسية حالياً. يرجى مراجعة إدارة المدرسة للتأكد من تسجيلك في الشعبة.
             </div>
           ) : (
             studentCourses.map((course, idx) => (

@@ -20,22 +20,24 @@ import {
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
-import { MOCK_USERS, MOCK_COURSES } from "@/lib/mock-data";
 import { validateFile, formatBytes } from "@/lib/storage";
-import { createLessonInDB } from "@/lib/services/lessons-service";
+import { getActiveUser } from "@/lib/user-store";
+import { createLessonInDB, getNextLessonNumberFromDB } from "@/lib/services/lessons-service";
+import { getTeacherCoursesFromDB } from "@/lib/services/academic-service";
 
 export default function NewLessonPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const teacher = MOCK_USERS.teacher1;
+  const [teacher, setTeacher] = useState<any>(null);
   const params = useParams();
-  const courseId = params?.id as string;
+  const initialCourseId = params?.id as string;
 
-  const course =
-    MOCK_COURSES.find((c) => c.id === courseId) || MOCK_COURSES[0];
+  const [assignedCourses, setAssignedCourses] = useState<any[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId || "");
+  const [selectedCourse, setSelectedCourse] = useState<any>(null);
 
   // Form States
-  const [lessonNumber, setLessonNumber] = useState<number>(5);
+  const [lessonNumber, setLessonNumber] = useState<number>(1);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [objectives, setObjectives] = useState("");
@@ -50,16 +52,56 @@ export default function NewLessonPage() {
   const [fileError, setFileError] = useState<string | null>(null);
 
   // Scheduled Session States
-  const [hasSession, setHasSession] = useState(true);
-  const [sessionTitle, setSessionTitle] = useState("جلسة شرح عملي وتطبيق");
-  const [sessionDate, setSessionDate] = useState("2026-11-28");
+  const [hasSession, setHasSession] = useState(false);
+  const [sessionTitle, setSessionTitle] = useState("جلسة شرح وتطبيق عملي");
+  const [sessionDate, setSessionDate] = useState("");
   const [startTime, setStartTime] = useState("10:00");
   const [endTime, setEndTime] = useState("12:00");
-  const [locationOrRoom, setLocationOrRoom] = useState("القاعة: 403 معمل الشبكات");
-  const [meetingUrl, setMeetingUrl] = useState("https://meet.google.com/sample-room");
+  const [locationOrRoom, setLocationOrRoom] = useState("");
+  const [meetingUrl, setMeetingUrl] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    async function loadInitial() {
+      const active = getActiveUser("TEACHER");
+      setTeacher(active);
+
+      try {
+        const dbCourses = await getTeacherCoursesFromDB(active.id || active.username);
+        setAssignedCourses(dbCourses || []);
+
+        let targetId = initialCourseId;
+        const exists = (dbCourses || []).some((c: any) => c.id === targetId);
+        if (!exists && dbCourses && dbCourses.length > 0) {
+          targetId = dbCourses[0].id;
+        }
+
+        setSelectedCourseId(targetId);
+        const match = (dbCourses || []).find((c: any) => c.id === targetId);
+        setSelectedCourse(match || null);
+
+        if (targetId) {
+          const nextNum = await getNextLessonNumberFromDB(targetId);
+          setLessonNumber(nextNum);
+        }
+      } catch (err) {
+        console.error("Error loading courses for lesson:", err);
+      }
+    }
+    loadInitial();
+  }, [initialCourseId]);
+
+  const handleCourseChange = async (newId: string) => {
+    setSelectedCourseId(newId);
+    const match = assignedCourses.find((c) => c.id === newId);
+    setSelectedCourse(match || null);
+    try {
+      const nextNum = await getNextLessonNumberFromDB(newId);
+      setLessonNumber(nextNum);
+    } catch {}
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError(null);
@@ -88,6 +130,10 @@ export default function NewLessonPage() {
   };
 
   const handleSubmit = async (targetStatus: "draft" | "published") => {
+    if (!selectedCourseId) {
+      setFileError("يرجى اختيار مقرر دراسي أولاً، أو مراجعة الإدارة لإسناد مواد لك.");
+      return;
+    }
     if (!title.trim()) {
       setFileError("يرجى إدخال عنوان الدرس.");
       return;
@@ -95,6 +141,7 @@ export default function NewLessonPage() {
 
     setIsSubmitting(true);
     setStatus(targetStatus);
+    setFileError(null);
 
     const materials: any[] = attachedFiles.map((f) => ({
       title: f.name,
@@ -111,9 +158,8 @@ export default function NewLessonPage() {
       });
     }
 
-    const targetCourseId = courseId || "80000000-0000-0000-0000-000000000001";
     const res = await createLessonInDB({
-      class_subject_id: targetCourseId,
+      class_subject_id: selectedCourseId,
       lesson_number: lessonNumber,
       title: title.trim(),
       description: description.trim() || undefined,
@@ -137,7 +183,7 @@ export default function NewLessonPage() {
     );
 
     setTimeout(() => {
-      router.push(`/teacher/courses/${targetCourseId}/lessons`);
+      router.push(`/teacher/courses/${selectedCourseId}/lessons`);
     }, 1500);
   };
 
@@ -158,7 +204,7 @@ export default function NewLessonPage() {
         {/* Top Header */}
         <div className="flex items-center justify-between">
           <Link
-            href={`/teacher/courses/${course.id}/lessons`}
+            href={selectedCourseId ? `/teacher/courses/${selectedCourseId}/lessons` : "/teacher/courses"}
             className="p-2 -mr-2 rounded-xl text-muted hover:text-foreground transition-colors"
           >
             <ChevronRight className="w-6 h-6" />
@@ -168,11 +214,18 @@ export default function NewLessonPage() {
               إنشاء درس جديد
             </h1>
             <p className="text-xs text-brand-teal mt-0.5">
-              {course.subject?.name} — ثالث ثانوي
+              {selectedCourse ? `${selectedCourse.name} — ${selectedCourse.grade} (${selectedCourse.section})` : "يرجى اختيار المقرر"}
             </p>
           </div>
           <div className="w-6" />
         </div>
+
+        {fileError && (
+          <div className="p-4 rounded-2xl bg-status-danger/15 border border-status-danger/30 text-status-danger text-sm flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <span>{fileError}</span>
+          </div>
+        )}
 
         {successMessage && (
           <div className="p-4 rounded-2xl bg-brand-teal/15 border border-brand-teal/30 text-brand-teal text-sm flex items-center gap-3">
@@ -187,6 +240,29 @@ export default function NewLessonPage() {
             <h3 className="text-base font-bold text-foreground pb-2 border-b border-border/80">
               البيانات الأساسية للدرس
             </h3>
+
+            <div>
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
+                مقرر التدريس والشعبة المستهدفة <span className="text-status-danger">*</span>
+              </label>
+              {assignedCourses.length === 0 ? (
+                <div className="p-3 rounded-xl bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs">
+                  لا توجد مقررات دراسية مسندة إليك حالياً. يرجى مراجعة إدارة المدرسة.
+                </div>
+              ) : (
+                <select
+                  value={selectedCourseId}
+                  onChange={(e) => handleCourseChange(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground text-sm focus:outline-none focus:border-brand-teal"
+                >
+                  {assignedCourses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} — {c.grade} ({c.section}) [رمز: {c.code}]
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="sm:col-span-1">

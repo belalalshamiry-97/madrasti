@@ -107,7 +107,36 @@ export async function getAssignmentsForStudentFromDB(studentIdOrUsername: string
       if (p?.id) studentUuid = p.id;
     }
 
-    // 1. Fetch all assignments with course & section details
+    if (!studentUuid) return [];
+
+    // Find student's active enrollment
+    const { data: enrollment } = await admin
+      .from("enrollments")
+      .select("section_id, semester_id")
+      .eq("student_id", studentUuid)
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (!enrollment?.section_id) {
+      // Student has no active section enrollment
+      return [];
+    }
+
+    let csQuery = admin
+      .from("class_subjects")
+      .select("id")
+      .eq("section_id", enrollment.section_id);
+
+    if (enrollment.semester_id) {
+      csQuery = csQuery.eq("semester_id", enrollment.semester_id);
+    }
+
+    const { data: allowedCS } = await csQuery;
+    if (!allowedCS || allowedCS.length === 0) return [];
+
+    const allowedCsIds = allowedCS.map((c) => c.id);
+
+    // 1. Fetch assignments strictly for this student's section
     const { data: assignments, error } = await admin
       .from("assignments")
       .select(`
@@ -124,6 +153,7 @@ export async function getAssignmentsForStudentFromDB(studentIdOrUsername: string
           sections ( name, grade_levels ( name ) )
         )
       `)
+      .in("class_subject_id", allowedCsIds)
       .order("created_at", { ascending: false });
 
     if (error || !assignments) return [];

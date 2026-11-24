@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import Link from "next/link";
@@ -8,19 +8,21 @@ import { Profile } from "@/types/database.types";
 import { cn } from "@/lib/utils";
 
 interface BottomNavigationProps {
-  user: Profile;
+  user?: Profile | null;
 }
 
 export function BottomNavigation({ user }: BottomNavigationProps) {
   const pathname = usePathname();
+  const userRole = user?.role || "STUDENT";
 
   const getHomeLink = () => {
-    switch (user.role) {
+    switch (userRole) {
       case "ADMIN":
         return "/admin";
       case "TEACHER":
         return "/teacher";
       case "STUDENT":
+      default:
         return "/student";
     }
   };
@@ -29,12 +31,12 @@ export function BottomNavigation({ user }: BottomNavigationProps) {
     { label: "الرئيسية", href: getHomeLink(), icon: Home },
     {
       label: "موادي",
-      href: user.role === "TEACHER" ? "/teacher/courses" : "/student/courses",
+      href: userRole === "TEACHER" ? "/teacher/courses" : "/student/courses",
       icon: BookOpen,
     },
     {
       label: "واجباتي",
-      href: user.role === "TEACHER" ? "/teacher/grading" : "/student/assignments",
+      href: userRole === "TEACHER" ? "/teacher/grading" : "/student/assignments",
       icon: FileCheck,
     },
     { label: "الرسائل", href: "/messages", icon: MessageSquare },

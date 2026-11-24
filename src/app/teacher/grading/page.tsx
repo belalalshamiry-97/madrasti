@@ -20,16 +20,14 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
-import { MOCK_USERS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
-import { getStoredSubjects, SubjectAssignment } from "@/lib/academic-store";
-import { getSubmissionsForTeacher, AssignmentSubmission } from "@/lib/submission-store";
+import { SubjectAssignment } from "@/lib/academic-store";
 import { getTeacherSubmissionsFromDB } from "@/lib/services/assignments-service";
 import { getClassSubjectsFromDB } from "@/lib/services/academic-service";
 
 export default function TeacherGradingQueuePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [currentTeacher, setCurrentTeacher] = useState(MOCK_USERS.teacher1);
+  const [currentTeacher, setCurrentTeacher] = useState<any>(null);
   const [teacherSubjects, setTeacherSubjects] = useState<SubjectAssignment[]>([]);
   const [submissionsList, setSubmissionsList] = useState<any[]>([]);
 
@@ -43,44 +41,36 @@ export default function TeacherGradingQueuePage() {
 
     async function loadData() {
       try {
-        const dbSubs = await getTeacherSubmissionsFromDB(active.id || active.username);
-        if (dbSubs && dbSubs.length > 0) {
-          setSubmissionsList(dbSubs);
-        } else {
-          const subs = getSubmissionsForTeacher(active.full_name, active.username);
-          setSubmissionsList(subs);
-        }
+        const teacherKey = active?.id || active?.username;
+        if (!teacherKey) return;
 
-        const classSubjects = await getClassSubjectsFromDB();
-        const myClasses = classSubjects.filter(
-          (cs) =>
+        const [dbSubs, dbCourses] = await Promise.all([
+          getTeacherSubmissionsFromDB(teacherKey),
+          getClassSubjectsFromDB(),
+        ]);
+
+        setSubmissionsList(dbSubs || []);
+
+        const myClasses = (dbCourses || []).filter(
+          (cs: any) =>
             cs.teacher_id === active.id ||
             cs.teacher_name?.toLowerCase().includes(active.full_name.toLowerCase())
         );
 
-        if (myClasses.length > 0) {
-          setTeacherSubjects(
-            myClasses.map((c) => ({
-              id: c.id,
-              name: c.subject_name,
-              code: c.subject_code,
-              type: "theory",
-              grade: c.grade_name,
-              section: c.section_name || "الشعبة (أ)",
-              teacherName: c.teacher_name || active.full_name,
-            }))
-          );
-        } else {
-          const allSubjects = getStoredSubjects();
-          const assigned = allSubjects.filter(
-            (s) =>
-              s.teacherName.toLowerCase().includes(active.full_name.toLowerCase()) ||
-              active.full_name.toLowerCase().includes(s.teacherName.toLowerCase())
-          );
-          setTeacherSubjects(assigned);
-        }
+        setTeacherSubjects(
+          myClasses.map((c: any) => ({
+            id: c.id,
+            name: c.subject_name,
+            code: c.subject_code,
+            type: "theory",
+            grade: c.grade_name,
+            section: c.section_name || "الشعبة (أ)",
+            teacherName: c.teacher_name || active.full_name,
+          }))
+        );
       } catch (err) {
-        console.error("Failed to load teacher submissions:", err);
+        console.error("Failed to load teacher submissions from DB:", err);
+        setSubmissionsList([]);
       }
     }
     loadData();
@@ -135,11 +125,7 @@ export default function TeacherGradingQueuePage() {
                 مراجعة حلول الطلاب ورصد الدرجات للمواد المسندة إليك حصراً: (
                 {teacherSubjects.length > 0
                   ? teacherSubjects.map((s) => s.name).join(" • ")
-                  : currentTeacher.full_name.includes("بلال")
-                  ? "إدارة الشبكات"
-                  : currentTeacher.full_name.includes("فاطمة")
-                  ? "أمنية النظم • الرياضيات"
-                  : "لا توجد مواد مسندة بعد"}
+                  : "المواد المسندة من إدارة المدرسة"}
                 )
               </p>
             </div>

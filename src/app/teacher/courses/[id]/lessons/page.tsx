@@ -19,35 +19,48 @@ import {
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
-import { MOCK_USERS, MOCK_COURSES, MOCK_LESSONS } from "@/lib/mock-data";
+import { getActiveUser } from "@/lib/user-store";
 import { Lesson } from "@/types/database.types";
 import { getLessonsForCourseFromDB, deleteLessonFromDB } from "@/lib/services/lessons-service";
+import { getTeacherCoursesFromDB } from "@/lib/services/academic-service";
 
 export default function TeacherCourseLessonsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const teacher = MOCK_USERS.teacher1;
+  const [teacher, setTeacher] = useState<any>(null);
+  const [courseInfo, setCourseInfo] = useState<any>(null);
   const params = useParams();
   const courseId = params?.id as string;
 
-  const course =
-    MOCK_COURSES.find((c) => c.id === courseId) || MOCK_COURSES[0];
-
-  const [lessons, setLessons] = useState<Lesson[]>(MOCK_LESSONS);
-  const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lessonToDelete, setLessonToDelete] = useState<any | null>(null);
   const [deleteSuccessMsg, setDeleteSuccessMsg] = useState<string | null>(null);
 
   React.useEffect(() => {
-    async function loadLessons() {
+    async function loadData() {
+      const active = getActiveUser("TEACHER");
+      setTeacher(active);
+
       try {
-        const dbLessons = await getLessonsForCourseFromDB(courseId);
-        if (dbLessons && dbLessons.length > 0) {
-          setLessons(dbLessons as any);
+        const [dbLessons, dbCourses] = await Promise.all([
+          getLessonsForCourseFromDB(courseId),
+          getTeacherCoursesFromDB(active.id || active.username),
+        ]);
+
+        setLessons(dbLessons || []);
+        const matched = (dbCourses || []).find((c: any) => c.id === courseId);
+        if (matched) {
+          setCourseInfo(matched);
+        } else if (dbLessons && dbLessons.length > 0) {
+          setCourseInfo({ name: "المقرر الدراسي", section: "الشعبة الدراسية" });
         }
       } catch (err) {
-        console.warn("Falling back to local lessons:", err);
+        console.error("Error loading lessons from DB:", err);
+      } finally {
+        setIsLoading(false);
       }
     }
-    loadLessons();
+    loadData();
   }, [courseId]);
 
   const toggleStatus = (id: string) => {
@@ -101,11 +114,11 @@ export default function TeacherCourseLessonsPage() {
               دروس ومحاضرات المقرر
             </h1>
             <p className="text-xs text-brand-teal mt-0.5">
-              {course.subject?.name} — شعبة (أ)
+              {courseInfo ? `${courseInfo.name} — ${courseInfo.grade} (${courseInfo.section})` : "المقرر الدراسي"}
             </p>
           </div>
           <Link
-            href={`/teacher/courses/${course.id}/lessons/new`}
+            href={`/teacher/courses/${courseId}/lessons/new`}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-cyan text-background text-xs font-bold shadow-glow hover:opacity-90 transition-all"
           >
             <PlusCircle className="w-4 h-4" />
@@ -208,7 +221,7 @@ export default function TeacherCourseLessonsPage() {
                     </button>
 
                     <Link
-                      href={`/student/courses/${course.id}/lessons/${lesson.id}`}
+                      href={`/student/courses/${courseId}/lessons/${lesson.id}`}
                       className="p-2 rounded-xl text-muted hover:text-brand-cyan hover:bg-surface-secondary transition-colors"
                       title="معاينة كما يراها الطالب"
                     >

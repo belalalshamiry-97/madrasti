@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -36,10 +36,13 @@ export async function loginWithSupabase(loginIdentifier: string, password: strin
         .maybeSingle();
 
       if (profileByUsername) {
-        // Construct the standard school email for auth
-        email = `${rawInput}@madrasti.school`;
+        const { data: authUser } = await admin.auth.admin.getUserById(profileByUsername.id);
+        if (authUser?.user?.email) {
+          email = authUser.user.email;
+        } else {
+          email = `${rawInput}@madrasti.school`;
+        }
       } else {
-        // Fallback email attempt
         email = `${rawInput}@madrasti.school`;
       }
     }

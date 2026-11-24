@@ -16,14 +16,13 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { GradeBadge } from "@/components/common/GradeBadge";
-import { MOCK_USERS } from "@/lib/mock-data";
 import { getActiveUser } from "@/lib/user-store";
 import { getSubmissionsForStudent, AssignmentSubmission } from "@/lib/submission-store";
 import { getStudentGradesFromDB } from "@/lib/services/assignments-service";
 
 export default function StudentGradesPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [student, setStudent] = useState(MOCK_USERS.student1);
+  const [student, setStudent] = useState<any>(null);
   const [gradedItems, setGradedItems] = useState<any[]>([]);
 
   useEffect(() => {
@@ -32,16 +31,13 @@ export default function StudentGradesPage() {
 
     async function loadData() {
       try {
-        const dbGrades = await getStudentGradesFromDB(active.id || active.username);
-        if (dbGrades && dbGrades.length > 0) {
-          setGradedItems(dbGrades);
-        } else {
-          const subs = getSubmissionsForStudent(active.id, active.username);
-          const graded = subs.filter((s) => s.status === "graded");
-          setGradedItems(graded);
-        }
+        const studentKey = active?.id || active?.username;
+        if (!studentKey) return;
+        const dbGrades = await getStudentGradesFromDB(studentKey);
+        setGradedItems(dbGrades || []);
       } catch (err) {
         console.error("Failed to load student grades from DB:", err);
+        setGradedItems([]);
       }
     }
     loadData();

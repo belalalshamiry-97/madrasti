@@ -52,6 +52,18 @@ export async function recordAttendanceInDB(records: AttendanceRecordInput[]): Pr
       });
     }
 
+    // Clean up existing records for these students on this class_subject and date to avoid duplicates
+    const studentIds = payloads.map((p) => p.student_id);
+    const date = records[0].attendance_date;
+    const classSubjectId = records[0].class_subject_id;
+
+    await admin
+      .from("attendance_records")
+      .delete()
+      .eq("class_subject_id", classSubjectId)
+      .eq("attendance_date", date)
+      .in("student_id", studentIds);
+
     const { data, error } = await admin.from("attendance_records").insert(payloads).select("id");
 
     if (error) {
@@ -66,6 +78,129 @@ export async function recordAttendanceInDB(records: AttendanceRecordInput[]): Pr
     return { success: true, insertedCount: data?.length || records.length };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+export interface AttendanceStudentRow {
+  student_id: string;
+  student_name: string;
+  student_number: string;
+  phone?: string;
+  section_id: string;
+  attendance_date: string;
+  status: "present" | "absent" | "late" | "excused";
+  notes?: string;
+}
+
+/**
+ * Fetch real enrolled students for a class_subject with existing or default attendance status
+ */
+export async function getSectionStudentsForAttendance(
+  classSubjectId: string,
+  date: string
+): Promise<{
+  students: AttendanceStudentRow[];
+  subjectName: string;
+  gradeName: string;
+  sectionName: string;
+}> {
+  try {
+    const admin = createAdminClient();
+
+    const { data: cs, error: csErr } = await admin
+      .from("class_subjects")
+      .select(`
+        id,
+        section_id,
+        semester_id,
+        subjects ( name, code ),
+        sections ( name, grade_levels ( name ) )
+      `)
+      .eq("id", classSubjectId)
+      .maybeSingle();
+
+    if (csErr || !cs) {
+      return {
+        students: [],
+        subjectName: "المقرر",
+        gradeName: "الصف",
+        sectionName: "الشعبة",
+      };
+    }
+
+    const subjectName = (cs.subjects as any)?.name || "المقرر";
+    const sectionName = (cs.sections as any)?.name || "الشعبة";
+    const gradeName = (cs.sections as any)?.grade_levels?.name || "الصف";
+
+    // Fetch active enrollments for this section
+    const { data: enrollments, error: enrollErr } = await admin
+      .from("enrollments")
+      .select(`
+        student_id,
+        profiles:student_id (
+          id,
+          full_name,
+          username,
+          phone
+        )
+      `)
+      .eq("section_id", cs.section_id)
+      .eq("status", "active");
+
+    if (enrollErr || !enrollments || enrollments.length === 0) {
+      return {
+        students: [],
+        subjectName,
+        gradeName,
+        sectionName,
+      };
+    }
+
+    // Fetch existing attendance for this classSubject and date
+    const { data: existingRecords } = await admin
+      .from("attendance_records")
+      .select("student_id, status, notes")
+      .eq("class_subject_id", classSubjectId)
+      .eq("attendance_date", date);
+
+    const recordMap = new Map<string, { status: any; notes: string }>();
+    if (existingRecords) {
+      existingRecords.forEach((r) => {
+        recordMap.set(r.student_id, { status: r.status, notes: r.notes || "" });
+      });
+    }
+
+    const students: AttendanceStudentRow[] = enrollments.map((en: any) => {
+      const prof = en.profiles;
+      const sId = prof?.id || en.student_id;
+      const existing = recordMap.get(sId);
+
+      return {
+        student_id: sId,
+        student_name: prof?.full_name || "طالب",
+        student_number: prof?.username || "student",
+        phone: prof?.phone || "",
+        section_id: cs.section_id,
+        attendance_date: date,
+        status: (existing?.status as any) || "present",
+        notes: existing?.notes || "",
+      };
+    });
+
+    return {
+      students,
+      subjectName,
+      gradeName,
+      sectionName,
+    };
+  } catch (err) {
+    console.error("Error in getSectionStudentsForAttendance:", err);
+    return {
+      students: [],
+      subjectName: "المقرر",
+      gradeName: "الصف",
+      sectionName: "الشعبة",
+    };
   }
 }
 
@@ -122,6 +257,58 @@ export async function getAttendanceForDateFromDB(date: string, classSubjectId?: 
     }));
   } catch (err) {
     console.error("Error in getAttendanceForDateFromDB:", err);
+    return [];
+  }
+}
+
+/**
+ * Get all attendance records from Supabase (for admin overview)
+ */
+export async function getAllAttendanceFromDB(limit = 200) {
+  try {
+    const admin = createAdminClient();
+
+    const { data, error } = await admin
+      .from("attendance_records")
+      .select(`
+        id,
+        attendance_date,
+        status,
+        notes,
+        student_id,
+        class_subject_id,
+        profiles:student_id (
+          full_name,
+          username
+        ),
+        class_subjects (
+          subjects ( name ),
+          sections ( name, grade_levels ( name ) )
+        ),
+        recorder:recorded_by (
+          full_name
+        )
+      `)
+      .order("attendance_date", { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    return data.map((rec: any) => ({
+      id: rec.id,
+      studentId: rec.student_id,
+      studentName: (rec.profiles as any)?.full_name || "طالب",
+      username: (rec.profiles as any)?.username || "student",
+      grade: (rec.class_subjects as any)?.sections?.grade_levels?.name || "المرحلة الثانوية",
+      section: (rec.class_subjects as any)?.sections?.name || "الشعبة (أ)",
+      date: rec.attendance_date,
+      subject: (rec.class_subjects as any)?.subjects?.name || "المادة",
+      teacherName: (rec.recorder as any)?.full_name || "المعلم",
+      status: rec.status,
+      note: rec.notes || "",
+    }));
+  } catch (err) {
+    console.error("Error in getAllAttendanceFromDB:", err);
     return [];
   }
 }

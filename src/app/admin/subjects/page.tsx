@@ -27,15 +27,18 @@ import {
   getClassSubjectsFromDB,
   getSectionsFromDB,
   getSemestersFromDB,
+  getGradeLevelsFromDB,
   createSubjectAction,
   updateSubjectAction,
   deleteSubjectAction,
   assignTeacherToSubjectAction,
+  updateClassSubjectTeacherAction,
   deleteClassSubjectAction,
   SubjectData,
   ClassSubjectAssignment,
   AcademicSectionData,
   SemesterData,
+  AcademicGradeData,
 } from "@/lib/services/academic-service";
 import { Profile } from "@/types/database.types";
 import { getActiveUser } from "@/lib/user-store";
@@ -53,6 +56,7 @@ export default function AdminSubjectsPage() {
   const [subjects, setSubjects] = useState<SubjectData[]>([]);
   const [assignments, setAssignments] = useState<ClassSubjectAssignment[]>([]);
   const [sections, setSections] = useState<AcademicSectionData[]>([]);
+  const [grades, setGrades] = useState<AcademicGradeData[]>([]);
   const [semesters, setSemesters] = useState<SemesterData[]>([]);
   const [teachers, setTeachers] = useState<Profile[]>([]);
 
@@ -68,6 +72,10 @@ export default function AdminSubjectsPage() {
   const [editingSubject, setEditingSubject] = useState<SubjectData | null>(null);
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isEditAssignModalOpen, setIsEditAssignModalOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<ClassSubjectAssignment | null>(null);
+  const [editAssignTeacherId, setEditAssignTeacherId] = useState("");
+
   const [subjectToDelete, setSubjectToDelete] = useState<SubjectData | null>(null);
   const [assignmentToDelete, setAssignmentToDelete] = useState<ClassSubjectAssignment | null>(null);
 
@@ -77,6 +85,7 @@ export default function AdminSubjectsPage() {
   const [subjectDesc, setSubjectDesc] = useState("");
 
   const [assignSemesterId, setAssignSemesterId] = useState("");
+  const [assignGradeId, setAssignGradeId] = useState("");
   const [assignSectionId, setAssignSectionId] = useState("");
   const [assignSubjectId, setAssignSubjectId] = useState("");
   const [assignTeacherId, setAssignTeacherId] = useState("");
@@ -89,11 +98,12 @@ export default function AdminSubjectsPage() {
   const loadAllData = async () => {
     setIsLoading(true);
     try {
-      const [dbSubjects, dbAssignments, dbSections, dbSemesters, dbTeachers] =
+      const [dbSubjects, dbAssignments, dbSections, dbGrades, dbSemesters, dbTeachers] =
         await Promise.all([
           getSubjectsFromDB(),
           getClassSubjectsFromDB(),
           getSectionsFromDB(),
+          getGradeLevelsFromDB(),
           getSemestersFromDB(),
           getProfilesFromDB("TEACHER"),
         ]);
@@ -101,6 +111,7 @@ export default function AdminSubjectsPage() {
       setSubjects(dbSubjects);
       setAssignments(dbAssignments);
       setSections(dbSections);
+      setGrades(dbGrades);
       setSemesters(dbSemesters);
       setTeachers(dbTeachers);
 
@@ -108,7 +119,13 @@ export default function AdminSubjectsPage() {
         const activeSem = dbSemesters.find((s) => s.is_active) || dbSemesters[0];
         setAssignSemesterId(activeSem.id);
       }
-      if (dbSections.length > 0) setAssignSectionId(dbSections[0].id);
+      if (dbGrades.length > 0) {
+        setAssignGradeId(dbGrades[0].id);
+        const gradeSecs = dbSections.filter((s) => s.grade_level_id === dbGrades[0].id);
+        if (gradeSecs.length > 0) setAssignSectionId(gradeSecs[0].id);
+      } else if (dbSections.length > 0) {
+        setAssignSectionId(dbSections[0].id);
+      }
       if (dbSubjects.length > 0) setAssignSubjectId(dbSubjects[0].id);
       if (dbTeachers.length > 0) setAssignTeacherId(dbTeachers[0].id);
     } catch (err) {
@@ -224,16 +241,68 @@ export default function AdminSubjectsPage() {
     await loadAllData();
   };
 
+  const handleGradeChangeInAssign = (gradeId: string) => {
+    setAssignGradeId(gradeId);
+    const matching = sections.filter((s) => s.grade_level_id === gradeId);
+    if (matching.length > 0) {
+      setAssignSectionId(matching[0].id);
+    } else {
+      setAssignSectionId("");
+    }
+  };
+
   const handleOpenAssignModal = () => {
     setModalError(null);
     if (semesters.length > 0) {
       const activeSem = semesters.find((s) => s.is_active) || semesters[0];
       setAssignSemesterId(activeSem.id);
     }
-    if (sections.length > 0) setAssignSectionId(sections[0].id);
+    if (grades.length > 0) {
+      const firstGrade = grades[0];
+      setAssignGradeId(firstGrade.id);
+      const matchingSecs = sections.filter((s) => s.grade_level_id === firstGrade.id);
+      if (matchingSecs.length > 0) {
+        setAssignSectionId(matchingSecs[0].id);
+      } else if (sections.length > 0) {
+        setAssignSectionId(sections[0].id);
+      }
+    } else if (sections.length > 0) {
+      setAssignSectionId(sections[0].id);
+    }
     if (subjects.length > 0) setAssignSubjectId(subjects[0].id);
     if (teachers.length > 0) setAssignTeacherId(teachers[0].id);
     setIsAssignModalOpen(true);
+  };
+
+  const handleOpenEditAssignment = (assign: ClassSubjectAssignment) => {
+    setEditingAssignment(assign);
+    setEditAssignTeacherId(assign.teacher_id);
+    setModalError(null);
+    setIsEditAssignModalOpen(true);
+  };
+
+  const handleUpdateAssignmentTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAssignment || !editAssignTeacherId) {
+      setModalError("يرجى اختيار المعلم الجديد.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setModalError(null);
+
+    const res = await updateClassSubjectTeacherAction(editingAssignment.id, editAssignTeacherId);
+    setIsSubmitting(false);
+
+    if (!res.success) {
+      setModalError(res.error || "فشل تحديث المعلم المسند.");
+      return;
+    }
+
+    showToast(`✅ تم تحديث معلم مادة "${editingAssignment.subject_name}" بنجاح في Supabase!`);
+    setIsEditAssignModalOpen(false);
+    setEditingAssignment(null);
+    await loadAllData();
   };
 
   const handleSaveAssignment = async (e: React.FormEvent) => {
@@ -553,13 +622,22 @@ export default function AdminSubjectsPage() {
                           </div>
                         </td>
                         <td className="py-3.5 px-4 text-center">
-                          <button
-                            onClick={() => setAssignmentToDelete(assign)}
-                            className="p-1.5 rounded-lg bg-status-danger/10 hover:bg-status-danger/20 text-status-danger transition-colors"
-                            title="إلغاء الإسناد"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => handleOpenEditAssignment(assign)}
+                              className="p-1.5 rounded-lg bg-brand-teal/10 hover:bg-brand-teal/20 text-brand-teal transition-colors"
+                              title="تعديل المعلم المسند"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setAssignmentToDelete(assign)}
+                              className="p-1.5 rounded-lg bg-status-danger/10 hover:bg-status-danger/20 text-status-danger transition-colors"
+                              title="إلغاء الإسناد"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -829,20 +907,40 @@ export default function AdminSubjectsPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="block font-semibold text-foreground mb-1">الصف والشعبة الدراسية *</label>
-                <select
-                  required
-                  value={assignSectionId}
-                  onChange={(e) => setAssignSectionId(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-teal"
-                >
-                  {sections.map((sec) => (
-                    <option key={sec.id} value={sec.id}>
-                      {sec.grade_name} • {sec.name} ({sec.track_name})
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">الصف الدراسي *</label>
+                  <select
+                    required
+                    value={assignGradeId}
+                    onChange={(e) => handleGradeChangeInAssign(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-teal"
+                  >
+                    {grades.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">الشعبة الدراسية *</label>
+                  <select
+                    required
+                    value={assignSectionId}
+                    onChange={(e) => setAssignSectionId(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-teal"
+                  >
+                    {sections
+                      .filter((s) => !assignGradeId || s.grade_level_id === assignGradeId)
+                      .map((sec) => (
+                        <option key={sec.id} value={sec.id}>
+                          {sec.name} {sec.track_name ? `(${sec.track_name})` : ""}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -897,6 +995,99 @@ export default function AdminSubjectsPage() {
                     </>
                   ) : (
                     <span>تأكيد الإسناد الرسمي</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT ASSIGNMENT (CHANGE TEACHER) */}
+      {isEditAssignModalOpen && editingAssignment && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-surface border border-border w-full max-w-lg rounded-3xl p-6 shadow-card space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-brand-teal" />
+                <h3 className="text-base font-bold text-foreground">تعديل المعلم المسند للمقرر</h3>
+              </div>
+              <button
+                onClick={() => setIsEditAssignModalOpen(false)}
+                className="p-1 rounded-xl text-muted hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {modalError && (
+              <div className="p-3 rounded-2xl bg-status-danger/15 border border-status-danger/30 text-status-danger text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
+
+            <div className="p-3.5 rounded-2xl bg-surface-secondary border border-border space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-muted">المادة الدراسية:</span>
+                <span className="font-bold text-foreground">{editingAssignment.subject_name} ({editingAssignment.subject_code})</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted">الصف والشعبة:</span>
+                <span className="font-bold text-foreground">{editingAssignment.grade_name} - شعبة {editingAssignment.section_name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted">الفصل الدراسي:</span>
+                <span className="font-bold text-foreground">
+                  {semesters.find((s) => s.id === editingAssignment.semester_id)?.name || "الفصل الحالي"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted">المعلم الحالي:</span>
+                <span className="font-bold text-brand-cyan">{editingAssignment.teacher_name}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleUpdateAssignmentTeacher} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-foreground mb-1">اختيار المعلم الجديد *</label>
+                <select
+                  required
+                  value={editAssignTeacherId}
+                  onChange={(e) => setEditAssignTeacherId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-teal"
+                >
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.full_name} (@{t.username})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted mt-1.5">
+                  تغيير المعلم يحافظ على جميع الدروس والواجبات والاختبارات المرتبطة بالمقرر، وتظهر المادة فوراً للمعلم الجديد ولجميع طلاب الشعبة.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsEditAssignModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-surface-secondary text-muted hover:text-foreground"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2.5 rounded-xl bg-brand-teal text-background font-bold flex items-center gap-1.5 shadow-glow hover:brightness-110 disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري تحديث المعلم...</span>
+                    </>
+                  ) : (
+                    <span>تأكيد تغيير المعلم</span>
                   )}
                 </button>
               </div>

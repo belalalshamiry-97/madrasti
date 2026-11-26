@@ -24,8 +24,11 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { DeveloperFooter } from "@/components/common/DeveloperFooter";
-import { MOCK_USERS } from "@/lib/mock-data";
-import { getAttendanceForDateFromDB } from "@/lib/services/attendance-service";
+import { getActiveUser } from "@/lib/user-store";
+import {
+  getAllAttendanceFromDB,
+  getAttendanceForDateFromDB,
+} from "@/lib/services/attendance-service";
 
 interface AttendanceRecord {
   id: string;
@@ -45,220 +48,13 @@ interface AttendanceRecord {
 
 export default function AdminAttendancePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const admin = MOCK_USERS.admin;
+  const [adminUser, setAdminUser] = useState<any>({
+    full_name: "مدير المدرسة",
+    role: "ADMIN",
+  });
 
-  const [records, setRecords] = useState<AttendanceRecord[]>([
-    {
-      id: "att-1",
-      studentId: "1",
-      studentName: "عمر أحمد بافضل",
-      username: "student1",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (أ)",
-      date: "2026-11-23",
-      dayName: "الإثنين",
-      period: "الحصة الأولى",
-      subject: "إدارة الشبكات ونظم التشغيل",
-      teacherName: "م. بلال الشميري",
-      status: "present",
-      note: "حاضر في الموعد",
-    },
-    {
-      id: "att-2",
-      studentId: "2",
-      studentName: "سارة خالد الكثيري",
-      username: "student2",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (أ)",
-      date: "2026-11-23",
-      dayName: "الإثنين",
-      period: "الحصة الأولى",
-      subject: "إدارة الشبكات ونظم التشغيل",
-      teacherName: "م. بلال الشميري",
-      status: "present",
-      note: "مشاركة ممتازة",
-    },
-    {
-      id: "att-3",
-      studentId: "3",
-      studentName: "محمد ياسين اليافعي",
-      username: "student3",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (ب)",
-      date: "2026-11-23",
-      dayName: "الإثنين",
-      period: "الحصة الثانية",
-      subject: "الفيزياء النووية",
-      teacherName: "أ. عبد الله بارحيم",
-      status: "late",
-      note: "تأخر 10 دقائق",
-    },
-    {
-      id: "att-4",
-      studentId: "4",
-      studentName: "أروى عبد الله بارحيم",
-      username: "student4",
-      grade: "الثاني الثانوي",
-      section: "الشعبة (أ)",
-      date: "2026-11-23",
-      dayName: "الإثنين",
-      period: "الحصة الأولى",
-      subject: "الرياضيات التطبيقية",
-      teacherName: "أ. فاطمة العولقي",
-      status: "excused",
-      note: "عذر طبي معتمد",
-    },
-    {
-      id: "att-5",
-      studentId: "5",
-      studentName: "خالد سعيد العامري",
-      username: "student5",
-      grade: "الأول الثانوي",
-      section: "الشعبة (أ)",
-      date: "2026-11-23",
-      dayName: "الإثنين",
-      period: "الحصة الأولى",
-      subject: "اللغة الإنجليزية",
-      teacherName: "أ. سالم باوزير",
-      status: "absent",
-      note: "غياب بدون إشعار",
-    },
-    {
-      id: "att-6",
-      studentId: "6",
-      studentName: "فاطمة سالم باوزير",
-      username: "student6",
-      grade: "الأول الثانوي",
-      section: "الشعبة (ب)",
-      date: "2026-11-23",
-      dayName: "الإثنين",
-      period: "الحصة الثالثة",
-      subject: "الكيمياء العامة",
-      teacherName: "أ. فاطمة العولقي",
-      status: "present",
-      note: "حاضرة",
-    },
-    {
-      id: "att-7",
-      studentId: "1",
-      studentName: "عمر أحمد بافضل",
-      username: "student1",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (أ)",
-      date: "2026-11-22",
-      dayName: "الأحد",
-      period: "الحصة الرابعة",
-      subject: "الأمن السيبراني",
-      teacherName: "م. بلال الشميري",
-      status: "present",
-      note: "حاضر",
-    },
-    {
-      id: "att-8",
-      studentId: "2",
-      studentName: "سارة خالد الكثيري",
-      username: "student2",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (أ)",
-      date: "2026-11-22",
-      dayName: "الأحد",
-      period: "الحصة الرابعة",
-      subject: "الأمن السيبراني",
-      teacherName: "م. بلال الشميري",
-      status: "present",
-      note: "حاضرة",
-    },
-    {
-      id: "att-9",
-      studentId: "3",
-      studentName: "محمد ياسين اليافعي",
-      username: "student3",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (ب)",
-      date: "2026-11-22",
-      dayName: "الأحد",
-      period: "الحصة الأولى",
-      subject: "التفاضل والتكامل",
-      teacherName: "أ. فاطمة العولقي",
-      status: "present",
-      note: "حاضر",
-    },
-    {
-      id: "att-10",
-      studentId: "4",
-      studentName: "أروى عبد الله بارحيم",
-      username: "student4",
-      grade: "الثاني الثانوي",
-      section: "الشعبة (أ)",
-      date: "2026-11-22",
-      dayName: "الأحد",
-      period: "الحصة الثانية",
-      subject: "التاريخ الحديث",
-      teacherName: "أ. ناصر السعدي",
-      status: "present",
-      note: "حاضرة",
-    },
-    {
-      id: "att-11",
-      studentId: "5",
-      studentName: "خالد سعيد العامري",
-      username: "student5",
-      grade: "الأول الثانوي",
-      section: "الشعبة (أ)",
-      date: "2026-11-22",
-      dayName: "الأحد",
-      period: "الحصة الثالثة",
-      subject: "الفيزياء العامة",
-      teacherName: "أ. عبد الله بارحيم",
-      status: "present",
-      note: "حاضر",
-    },
-    {
-      id: "att-12",
-      studentId: "6",
-      studentName: "فاطمة سالم باوزير",
-      username: "student6",
-      grade: "الأول الثانوي",
-      section: "الشعبة (ب)",
-      date: "2026-11-22",
-      dayName: "الأحد",
-      period: "الحصة الأولى",
-      subject: "اللغة العربية",
-      teacherName: "أ. ناصر السعدي",
-      status: "absent",
-      note: "غياب غير مبرر",
-    },
-    {
-      id: "att-13",
-      studentId: "1",
-      studentName: "عمر أحمد بافضل",
-      username: "student1",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (أ)",
-      date: "2026-11-21",
-      dayName: "السبت",
-      period: "الحصة الثانية",
-      subject: "إدارة الشبكات",
-      teacherName: "م. بلال الشميري",
-      status: "present",
-      note: "حاضر",
-    },
-    {
-      id: "att-14",
-      studentId: "3",
-      studentName: "محمد ياسين اليافعي",
-      username: "student3",
-      grade: "الثالث الثانوي",
-      section: "الشعبة (ب)",
-      date: "2026-11-21",
-      dayName: "السبت",
-      period: "الحصة الثانية",
-      subject: "الأحياء",
-      teacherName: "أ. عبد الله بارحيم",
-      status: "present",
-      note: "حاضر",
-    },
-  ]);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [selectedDate, setSelectedDate] = useState<string>("ALL");
   const [selectedGrade, setSelectedGrade] = useState<string>("ALL");
@@ -269,34 +65,39 @@ export default function AdminAttendancePage() {
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
 
   useEffect(() => {
+    const active = getActiveUser("ADMIN");
+    if (active) setAdminUser(active);
+
     async function loadData() {
-      if (selectedDate !== "ALL") {
-        try {
-          const dbRecords = await getAttendanceForDateFromDB(selectedDate);
-          if (dbRecords && dbRecords.length > 0) {
-            setRecords((prev) => {
-              const otherDates = prev.filter((r) => r.date !== selectedDate);
-              const mapped = dbRecords.map((r: any) => ({
-                id: r.id,
-                studentId: r.studentId,
-                studentName: r.studentName,
-                username: r.username,
-                grade: r.grade,
-                section: r.section,
-                date: r.date,
-                dayName: "اليوم",
-                period: "الحصة الأولى",
-                subject: r.subject,
-                teacherName: r.teacherName,
-                status: r.status,
-                note: r.note,
-              }));
-              return [...mapped, ...otherDates];
-            });
-          }
-        } catch (err) {
-          console.error("Failed to load attendance records:", err);
+      setIsLoading(true);
+      try {
+        let dbRecords: any[] = [];
+        if (selectedDate !== "ALL") {
+          dbRecords = await getAttendanceForDateFromDB(selectedDate);
+        } else {
+          dbRecords = await getAllAttendanceFromDB(200);
         }
+
+        const mapped: AttendanceRecord[] = (dbRecords || []).map((r: any) => ({
+          id: r.id,
+          studentId: r.studentId,
+          studentName: r.studentName,
+          username: r.username,
+          grade: r.grade,
+          section: r.section,
+          date: r.date,
+          dayName: "اليوم",
+          period: "الحصة الأولى",
+          subject: r.subject,
+          teacherName: r.teacherName,
+          status: r.status,
+          note: r.note,
+        }));
+        setRecords(mapped);
+      } catch (err) {
+        console.error("Failed to load attendance records:", err);
+      } finally {
+        setIsLoading(false);
       }
     }
     loadData();
@@ -378,8 +179,8 @@ export default function AdminAttendancePage() {
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col">
-      <AppHeader user={admin} onOpenSidebar={() => setIsSidebarOpen(true)} />
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={admin} />
+      <AppHeader user={adminUser} onOpenSidebar={() => setIsSidebarOpen(true)} />
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={adminUser} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Header Breadcrumb */}
@@ -698,7 +499,7 @@ export default function AdminAttendancePage() {
         </div>
       )}
 
-      <BottomNavigation user={admin} />
+      <BottomNavigation user={adminUser} />
     </div>
   );
 }

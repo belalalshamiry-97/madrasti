@@ -30,6 +30,7 @@ import {
   getAssignmentByIdFromDB,
   submitAssignmentInDB,
 } from "@/lib/services/assignments-service";
+import { uploadFileAction } from "@/lib/services/storage-service";
 
 export default function StudentAssignmentDetailsPage() {
   const router = useRouter();
@@ -43,7 +44,7 @@ export default function StudentAssignmentDetailsPage() {
 
   const [existingSubmission, setExistingSubmission] = useState<any | null>(null);
   const [answerText, setAnswerText] = useState("");
-  const [solutionFiles, setSolutionFiles] = useState<{ name: string; size: number }[]>([]);
+  const [solutionFiles, setSolutionFiles] = useState<{ file?: File; name: string; size: number; url?: string }[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
 
   const [submissionStatus, setSubmissionStatus] = useState<
@@ -94,12 +95,42 @@ export default function StudentAssignmentDetailsPage() {
 
     setSolutionFiles((prev) => [
       ...prev,
-      { name: file.name, size: file.size },
+      { file, name: file.name, size: file.size },
     ]);
   };
 
   const removeFile = (idx: number) => {
     setSolutionFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const uploadSolutionFiles = async (): Promise<{ name: string; url: string; size: number }[]> => {
+    const uploadedList: { name: string; url: string; size: number }[] = [];
+    for (const f of solutionFiles) {
+      if (f.file) {
+        const formData = new FormData();
+        formData.append("file", f.file);
+        formData.append("bucket", "assignments");
+        formData.append("folder", `submissions/${assignment.id}`);
+
+        const res = await uploadFileAction(formData);
+        if (res.success && res.filePath) {
+          uploadedList.push({
+            name: f.name,
+            size: f.size,
+            url: res.filePath,
+          });
+        } else {
+          throw new Error(res.error || `فشل رفع الملف ${f.name}`);
+        }
+      } else {
+        uploadedList.push({
+          name: f.name,
+          size: f.size,
+          url: f.url || `submissions/${f.name}`,
+        });
+      }
+    }
+    return uploadedList;
   };
 
   const handleSaveDraft = async () => {
@@ -108,12 +139,13 @@ export default function StudentAssignmentDetailsPage() {
     setIsSubmitting(true);
 
     try {
+      const filesPayload = await uploadSolutionFiles();
       await submitAssignmentInDB({
         assignment_id: assignment.id,
         student_id: student.id || student.username,
         answer_text: answerText.trim(),
         status: "draft",
-        files: solutionFiles.map((f) => ({ name: f.name, size: f.size, url: `submissions/${f.name}` })),
+        files: filesPayload,
       });
       setSubmissionStatus("draft");
       setSuccessMessage("تم حفظ مسودة إجابتك بنجاح في قاعدة البيانات. يمكنك إكمالها لاحقاً.");
@@ -144,12 +176,13 @@ export default function StudentAssignmentDetailsPage() {
     });
 
     try {
+      const filesPayload = await uploadSolutionFiles();
       const res = await submitAssignmentInDB({
         assignment_id: assignment.id,
         student_id: student.id || student.username,
         answer_text: answerText.trim(),
         status: "submitted",
-        files: solutionFiles.map((f) => ({ name: f.name, size: f.size, url: `submissions/${f.name}` })),
+        files: filesPayload,
       });
 
       if (!res.success) {
@@ -272,6 +305,61 @@ export default function StudentAssignmentDetailsPage() {
             <GradeBadge maxScore={assignment.max_score} />
           </div>
         </div>
+
+        {/* Teacher's Attached Assignment Files */}
+        {assignment.attachments && assignment.attachments.length > 0 && (
+          <div className="p-6 rounded-3xl bg-surface border border-border shadow-card space-y-3">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <FileText className="w-4 h-4 text-brand-cyan" />
+              أوراق وملفات التكليف المرفقة من المعلم ({assignment.attachments.length})
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {assignment.attachments.map((att: any, idx: number) => {
+                const fileUrl = att.file_url || (att.file_path?.startsWith("http") ? att.file_path : undefined);
+                return (
+                  <div
+                    key={att.id || idx}
+                    className="p-3.5 rounded-2xl bg-surface-secondary/70 border border-border flex items-center justify-between gap-3 hover:border-brand-cyan/40 transition-all"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-surface text-brand-cyan flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-foreground truncate max-w-[180px]" dir="ltr">
+                          {att.name || att.file_name || "ملف_التكليف"}
+                        </h4>
+                        {att.file_size_bytes && (
+                          <span className="text-[10px] text-muted block">
+                            {formatBytes(att.file_size_bytes)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <a
+                      href={fileUrl || "#"}
+                      download={att.name || att.file_name || "assignment_file"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        if (!fileUrl) {
+                          e.preventDefault();
+                          alert("رابط الملف غير متاح حالياً للتحميل.");
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center gap-1.5 shadow-glow hover:brightness-110 transition-all shrink-0"
+                      title="تحميل ورقة التكليف"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>تحميل</span>
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Success Alert */}
         {successMessage && (

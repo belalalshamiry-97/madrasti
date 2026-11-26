@@ -23,18 +23,35 @@ export function PDFViewerModal({
   if (!isOpen) return null;
 
   const handleDownload = () => {
-    if (fileUrl) {
-      window.open(fileUrl, "_blank");
+    if (!fileUrl) {
+      setActionNotice("عذراً، رابط تحميل الملف غير متاح حالياً في السيرفر.");
+      setTimeout(() => setActionNotice(null), 3500);
+      return;
     }
-    setActionNotice(`جاري تنزيل الملف: ${fileName}`);
+
+    try {
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.download = fileName || "lecture_file";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setActionNotice(`تم بدء تنزيل الملف: ${fileName}`);
+    } catch {
+      window.open(fileUrl, "_blank");
+      setActionNotice(`تم فتح وتنزيل الملف: ${fileName}`);
+    }
     setTimeout(() => setActionNotice(null), 3000);
   };
 
   const handleOpenExternal = () => {
     if (fileUrl) {
-      window.open(fileUrl, "_blank");
+      window.open(fileUrl, "_blank", "noopener,noreferrer");
     } else {
-      setActionNotice("تم فتح الملف في نافذة مستقلة");
+      setActionNotice("رابط الملف غير متوفر");
       setTimeout(() => setActionNotice(null), 3000);
     }
   };

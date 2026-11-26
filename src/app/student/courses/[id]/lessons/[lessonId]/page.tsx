@@ -53,6 +53,8 @@ export default function LessonDetailsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [activePdfName, setActivePdfName] = useState("المحاضرة.pdf");
+  const [activePdfUrl, setActivePdfUrl] = useState<string | undefined>(undefined);
+  const [activePdfSize, setActivePdfSize] = useState<number | null>(null);
   const [student, setStudent] = useState<any>(null);
   const [lesson, setLesson] = useState<any>(null);
   const [course, setCourse] = useState<any>(null);
@@ -207,18 +209,22 @@ export default function LessonDetailsPage() {
                     const isVideo = mat.material_type === "video_link" || mat.external_url;
 
                     if (isPdf) {
+                      const materialUrl = mat.file_url || (mat.file_path?.startsWith("http") ? mat.file_path : undefined);
+
                       return (
                         <div
                           key={mat.id || idx}
                           onClick={() => {
                             setActivePdfName(mat.title || "ملف_المحاضرة.pdf");
+                            setActivePdfUrl(materialUrl);
+                            setActivePdfSize(mat.file_size_bytes || null);
                             setIsPdfModalOpen(true);
                           }}
                           className="p-4 rounded-2xl bg-surface border border-border flex items-center justify-between gap-3 shadow-card hover:border-brand-cyan/40 cursor-pointer transition-all group"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="w-10 h-10 rounded-xl bg-surface-secondary text-brand-cyan flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                              <Download className="w-5 h-5" />
+                              <FileText className="w-5 h-5" />
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 mb-1">
@@ -237,17 +243,39 @@ export default function LessonDetailsPage() {
                             </div>
                           </div>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActivePdfName(mat.title || "ملف_المحاضرة.pdf");
-                              setIsPdfModalOpen(true);
-                            }}
-                            className="p-2 rounded-xl bg-brand-cyan/15 hover:bg-brand-cyan/25 text-brand-cyan transition-colors"
-                            title="معاينة الملف"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActivePdfName(mat.title || "ملف_المحاضرة.pdf");
+                                setActivePdfUrl(materialUrl);
+                                setActivePdfSize(mat.file_size_bytes || null);
+                                setIsPdfModalOpen(true);
+                              }}
+                              className="p-2 rounded-xl bg-surface-secondary hover:bg-surface text-brand-cyan transition-colors"
+                              title="معاينة الملف"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <a
+                              href={materialUrl || "#"}
+                              download={mat.title || "lecture_file.pdf"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!materialUrl) {
+                                  e.preventDefault();
+                                  alert("رابط الملف غير متاح حالياً للتحميل المباشر.");
+                                }
+                              }}
+                              className="p-2 rounded-xl bg-brand-cyan text-background hover:brightness-110 shadow-glow transition-all"
+                              title="تحميل الملف مباشرة"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          </div>
                         </div>
                       );
                     }
@@ -443,7 +471,8 @@ export default function LessonDetailsPage() {
         isOpen={isPdfModalOpen}
         onClose={() => setIsPdfModalOpen(false)}
         fileName={activePdfName}
-        fileSizeBytes={1048576}
+        fileUrl={activePdfUrl}
+        fileSizeBytes={activePdfSize}
       />
 
       <BottomNavigation user={student} />

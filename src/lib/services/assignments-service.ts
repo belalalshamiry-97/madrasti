@@ -307,6 +307,24 @@ export async function getAssignmentByIdFromDB(assignmentId: string, studentIdOrU
       }
     }
 
+    const mappedAttachments = (a.assignment_attachments || []).map((att: any) => {
+      let fileUrl = null;
+      if (att.file_path) {
+        fileUrl = att.file_path.startsWith("http")
+          ? att.file_path
+          : admin.storage.from("assignments").getPublicUrl(att.file_path).data.publicUrl;
+      }
+      return {
+        id: att.id,
+        name: att.file_name,
+        file_name: att.file_name,
+        file_path: att.file_path,
+        file_size_bytes: att.file_size_bytes,
+        file_type: att.file_type,
+        file_url: fileUrl,
+      };
+    });
+
     return {
       id: a.id,
       title: a.title,
@@ -324,7 +342,7 @@ export async function getAssignmentByIdFromDB(assignmentId: string, studentIdOrU
       max_score: Number(a.max_score) || 10,
       allow_late_submissions: a.allow_late_submissions,
       allow_resubmissions: a.allow_resubmissions,
-      attachments: a.assignment_attachments || [],
+      attachments: mappedAttachments,
       student_submission: studentSubmission,
     };
   } catch (err) {

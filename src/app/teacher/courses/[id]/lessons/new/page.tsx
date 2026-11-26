@@ -24,6 +24,7 @@ import { validateFile, formatBytes } from "@/lib/storage";
 import { getActiveUser } from "@/lib/user-store";
 import { createLessonInDB, getNextLessonNumberFromDB } from "@/lib/services/lessons-service";
 import { getTeacherCoursesFromDB } from "@/lib/services/academic-service";
+import { uploadFileAction } from "@/lib/services/storage-service";
 
 export default function NewLessonPage() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export default function NewLessonPage() {
 
   // Attached files
   const [attachedFiles, setAttachedFiles] = useState<
-    { name: string; size: number; ext: string }[]
+    { file: File; name: string; size: number; ext: string }[]
   >([]);
   const [fileError, setFileError] = useState<string | null>(null);
 
@@ -118,6 +119,7 @@ export default function NewLessonPage() {
     setAttachedFiles((prev) => [
       ...prev,
       {
+        file,
         name: file.name,
         size: file.size,
         ext: validation.extension || "pdf",
@@ -143,12 +145,34 @@ export default function NewLessonPage() {
     setStatus(targetStatus);
     setFileError(null);
 
-    const materials: any[] = attachedFiles.map((f) => ({
-      title: f.name,
-      material_type: f.ext === "pdf" ? "pdf" : "document",
-      file_path: `materials/${f.name}`,
-      file_size_bytes: f.size,
-    }));
+    // 1. Upload files to Supabase Storage
+    const materials: any[] = [];
+    for (const f of attachedFiles) {
+      try {
+        const formData = new FormData();
+        formData.append("file", f.file);
+        formData.append("bucket", "course-materials");
+        formData.append("folder", selectedCourseId);
+
+        const uploadRes = await uploadFileAction(formData);
+        if (!uploadRes.success) {
+          setIsSubmitting(false);
+          setFileError(`فشل رفع الملف (${f.name}): ${uploadRes.error}`);
+          return;
+        }
+
+        materials.push({
+          title: f.name,
+          material_type: f.ext === "pdf" ? "pdf" : "document",
+          file_path: uploadRes.filePath,
+          file_size_bytes: f.size,
+        });
+      } catch (uploadErr: any) {
+        setIsSubmitting(false);
+        setFileError(`خطأ أثناء رفع الملف (${f.name}): ${uploadErr.message}`);
+        return;
+      }
+    }
 
     if (videoUrl && videoUrl.trim()) {
       materials.push({

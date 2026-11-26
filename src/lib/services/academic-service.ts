@@ -456,6 +456,50 @@ export async function deleteClassSubjectAction(id: string): Promise<{ success: b
 }
 
 /**
+ * Update the assigned teacher for an existing class_subject in Supabase
+ * Preserves all lessons, assignments, quizzes, and historical student records!
+ */
+export async function updateClassSubjectTeacherAction(
+  classSubjectId: string,
+  newTeacherId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const admin = createAdminClient();
+
+    // 1. Verify that the new teacher is valid
+    const { data: teacher, error: teacherErr } = await admin
+      .from("profiles")
+      .select("id, role, full_name")
+      .eq("id", newTeacherId)
+      .maybeSingle();
+
+    if (teacherErr || !teacher || (teacher.role !== "TEACHER" && teacher.role !== "ADMIN")) {
+      return { success: false, error: "المعلم المحدد غير صالح أو غير مسجل في الكادر التعليمي." };
+    }
+
+    // 2. Update teacher_id on class_subjects
+    const { error: updateErr } = await admin
+      .from("class_subjects")
+      .update({ teacher_id: newTeacherId })
+      .eq("id", classSubjectId);
+
+    if (updateErr) {
+      return { success: false, error: `فشل تعديل إسناد المعلم: ${updateErr.message}` };
+    }
+
+    revalidatePath("/admin/subjects");
+    revalidatePath("/teacher");
+    revalidatePath("/teacher/courses");
+    revalidatePath("/student");
+    revalidatePath("/student/courses");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Exception in updateClassSubjectTeacherAction:", err);
+    return { success: false, error: err.message || "حدث خطأ غير متوقع أثناء تحديث إسناد المعلم." };
+  }
+}
+
+/**
  * Get courses assigned to a specific teacher from Supabase with REAL student and lesson counts
  */
 export async function getTeacherCoursesFromDB(teacherIdOrUsername: string) {

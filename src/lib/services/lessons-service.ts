@@ -54,21 +54,36 @@ export async function getLessonsForCourseFromDB(classSubjectId: string) {
 
     if (error || !lessons) return [];
 
-    return lessons.map((l: any) => ({
-      id: l.id,
-      lesson_number: l.lesson_number || 1,
-      title: l.title,
-      description: l.description || "",
-      objectives: l.objectives || "",
-      content_html: l.content_html || "",
-      status: l.status || "published",
-      published_at: l.published_at || l.created_at,
-      materials: l.lesson_materials || [],
-      materials_count: l.lesson_materials?.length || 0,
-      sessions_count: 1,
-      assignments_count: 1,
-      questions_count: 0,
-    }));
+    return lessons.map((l: any) => {
+      const mappedMaterials = (l.lesson_materials || []).map((m: any) => {
+        let fileUrl = m.external_url || null;
+        if (m.file_path) {
+          fileUrl = m.file_path.startsWith("http")
+            ? m.file_path
+            : admin.storage.from("course-materials").getPublicUrl(m.file_path).data.publicUrl;
+        }
+        return {
+          ...m,
+          file_url: fileUrl,
+        };
+      });
+
+      return {
+        id: l.id,
+        lesson_number: l.lesson_number || 1,
+        title: l.title,
+        description: l.description || "",
+        objectives: l.objectives || "",
+        content_html: l.content_html || "",
+        status: l.status || "published",
+        published_at: l.published_at || l.created_at,
+        materials: mappedMaterials,
+        materials_count: mappedMaterials.length,
+        sessions_count: 1,
+        assignments_count: 1,
+        questions_count: 0,
+      };
+    });
   } catch (err) {
     console.error("Error fetching course lessons:", err);
     return [];
@@ -122,6 +137,19 @@ export async function getLessonDetailsFromDB(lessonId: string, studentId?: strin
       if (prog?.is_completed) isCompleted = true;
     }
 
+    const mappedMaterials = (lesson.lesson_materials || []).map((m: any) => {
+      let fileUrl = m.external_url || null;
+      if (m.file_path) {
+        fileUrl = m.file_path.startsWith("http")
+          ? m.file_path
+          : admin.storage.from("course-materials").getPublicUrl(m.file_path).data.publicUrl;
+      }
+      return {
+        ...m,
+        file_url: fileUrl,
+      };
+    });
+
     return {
       id: lesson.id,
       class_subject_id: lesson.class_subject_id,
@@ -134,7 +162,7 @@ export async function getLessonDetailsFromDB(lessonId: string, studentId?: strin
       objectives: lesson.objectives || "",
       content_html: lesson.content_html || "",
       status: lesson.status,
-      materials: lesson.lesson_materials || [],
+      materials: mappedMaterials,
       is_completed: isCompleted,
     };
   } catch (err) {

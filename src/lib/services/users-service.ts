@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -13,8 +13,27 @@ export interface UserCreateInput {
   phone?: string;
   grade?: string;
   section?: string;
+  grade_id?: string;
+  section_id?: string;
   permissions?: string[];
   status?: "active" | "suspended";
+}
+
+export interface EnrolledStudentData {
+  id: string; // student profile id (UUID)
+  full_name: string;
+  username: string;
+  phone: string;
+  is_active: boolean;
+  enrollment_id?: string;
+  grade_level_id?: string;
+  grade_name?: string;
+  section_id?: string;
+  section_name?: string;
+  semester_id?: string;
+  semester_name?: string;
+  enrolled_at?: string;
+  status: "active" | "withdrawn" | "completed";
 }
 
 /**
@@ -123,15 +142,16 @@ export async function createUserInDB(input: UserCreateInput): Promise<{
       return { success: false, error: `فشل حفظ الملف الشخصي: ${profileError.message}` };
     }
 
-    // 5. If student and section provided, handle enrollment if section exists
-    if (input.role === "STUDENT" && input.section) {
+    // 5. If student and section/section_id provided, handle enrollment
+    if (input.role === "STUDENT" && (input.section_id || input.section)) {
       try {
-        // Look up section or semester if exists
-        const { data: sec } = await admin
-          .from("sections")
-          .select("id")
-          .ilike("name", `%${input.section}%`)
-          .maybeSingle();
+        let secId = input.section_id;
+        if (!secId && input.section) {
+          let q = admin.from("sections").select("id").ilike("name", `%${input.section}%`);
+          if (input.grade_id) q = q.eq("grade_level_id", input.grade_id);
+          const { data: sec } = await q.maybeSingle();
+          secId = sec?.id;
+        }
 
         const { data: sem } = await admin
           .from("semesters")
@@ -139,13 +159,18 @@ export async function createUserInDB(input: UserCreateInput): Promise<{
           .eq("is_active", true)
           .maybeSingle();
 
-        if (sec && sem) {
-          await admin.from("enrollments").insert({
-            student_id: userId,
-            section_id: sec.id,
-            semester_id: sem.id,
-            status: "active",
-          });
+        const activeSemId = sem?.id || (await admin.from("semesters").select("id").limit(1).maybeSingle()).data?.id;
+
+        if (secId && activeSemId) {
+          await admin.from("enrollments").upsert(
+            {
+              student_id: userId,
+              section_id: secId,
+              semester_id: activeSemId,
+              status: "active",
+            },
+            { onConflict: "student_id,semester_id" }
+          );
         }
       } catch (enrollErr) {
         console.warn("Auto enrollment warning:", enrollErr);
@@ -289,3 +314,193 @@ export async function seedInitialAdminAndSchool(): Promise<{ success: boolean; m
     return { success: false, message: err.message };
   }
 }
+
+/**
+ * Fetch all registered students along with their active enrollment, section and grade from Supabase
+ */
+export async function getEnrolledStudentsFromDB(): Promise<EnrolledStudentData[]> {
+  try {
+    const admin = createAdminClient();
+
+    // 1. Get all student profiles
+    const { data: students, error: studErr } = await admin
+      .from("profiles")
+      .select("*")
+      .eq("role", "STUDENT")
+      .order("created_at", { ascending: false });
+
+    if (studErr || !students) return [];
+
+    // 2. Get all enrollments with relations
+    const { data: enrollments } = await admin
+      .from("enrollments")
+      .select(`
+        id,
+        student_id,
+        section_id,
+        semester_id,
+        status,
+        enrolled_at,
+        sections (
+          id,
+          name,
+          grade_level_id,
+          grade_levels ( id, name )
+        ),
+        semesters (
+          id,
+          name
+        )
+      `);
+
+    const enrollMap = new Map<string, any>();
+    if (enrollments) {
+      for (const e of enrollments) {
+        if (e.status === "active" || !enrollMap.has(e.student_id)) {
+          enrollMap.set(e.student_id, e);
+        }
+      }
+    }
+
+    return students.map((s) => {
+      const enr = enrollMap.get(s.id);
+      return {
+        id: s.id,
+        full_name: s.full_name,
+        username: s.username,
+        phone: s.phone || "",
+        is_active: Boolean(s.is_active),
+        enrollment_id: enr?.id,
+        grade_level_id: enr?.sections?.grade_levels?.id,
+        grade_name: enr?.sections?.grade_levels?.name || "غير محدد",
+        section_id: enr?.sections?.id,
+        section_name: enr?.sections?.name || "غير مسجل بشعبة",
+        semester_id: enr?.semesters?.id,
+        semester_name: enr?.semesters?.name || "الفصل الدراسي الأول",
+        enrolled_at: enr?.enrolled_at || s.created_at,
+        status: (enr?.status as any) || (s.is_active ? "active" : "suspended"),
+      };
+    });
+  } catch (err) {
+    console.error("Error in getEnrolledStudentsFromDB:", err);
+    return [];
+  }
+}
+
+/**
+ * Update student profile and change/assign section enrollment
+ */
+export async function updateStudentAction(input: {
+  student_id: string;
+  full_name: string;
+  phone?: string;
+  section_id?: string;
+  is_active?: boolean;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const admin = createAdminClient();
+    const cleanName = input.full_name?.trim();
+    if (!cleanName) return { success: false, error: "اسم الطالب مطلوب ولا يمكن تركه فارغاً." };
+
+    // 1. Update profile
+    const profileUpdate: any = {
+      full_name: cleanName,
+      phone: input.phone?.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (input.is_active !== undefined) {
+      profileUpdate.is_active = input.is_active;
+    }
+
+    const { error: profErr } = await admin
+      .from("profiles")
+      .update(profileUpdate)
+      .eq("id", input.student_id);
+
+    if (profErr) {
+      return { success: false, error: `فشل تحديث الملف الشخصي: ${profErr.message}` };
+    }
+
+    // 2. Update / Upsert enrollment if section_id is provided
+    if (input.section_id) {
+      // Find active semester
+      const { data: sem } = await admin
+        .from("semesters")
+        .select("id")
+        .eq("is_active", true)
+        .maybeSingle();
+
+      const semesterId = sem?.id || (await admin.from("semesters").select("id").limit(1).maybeSingle()).data?.id;
+
+      if (!semesterId) {
+        return { success: false, error: "تعذر العثور على فصل دراسي نشط لتسجيل الطالب." };
+      }
+
+      const { error: enrollErr } = await admin
+        .from("enrollments")
+        .upsert(
+          {
+            student_id: input.student_id,
+            section_id: input.section_id,
+            semester_id: semesterId,
+            status: input.is_active === false ? "withdrawn" : "active",
+            enrolled_at: new Date().toISOString(),
+          },
+          { onConflict: "student_id,semester_id" }
+        );
+
+      if (enrollErr) {
+        console.error("Error updating student enrollment:", enrollErr);
+        return { success: false, error: `فشل تحديث الشعبة المسجلة للطالب: ${enrollErr.message}` };
+      }
+    }
+
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/enrollments");
+    revalidatePath("/student");
+    revalidatePath("/student/courses");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Exception in updateStudentAction:", err);
+    return { success: false, error: err.message || "حدث خطأ غير متوقع أثناء تحديث بيانات الطالب." };
+  }
+}
+
+/**
+ * Update general user profile (Teacher or Admin or Student)
+ */
+export async function updateUserAction(input: {
+  user_id: string;
+  full_name: string;
+  phone?: string;
+  is_active?: boolean;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const admin = createAdminClient();
+    const cleanName = input.full_name?.trim();
+    if (!cleanName) return { success: false, error: "الاسم مطلوب ولا يمكن تركه فارغاً." };
+
+    const updatePayload: any = {
+      full_name: cleanName,
+      phone: input.phone?.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (input.is_active !== undefined) {
+      updatePayload.is_active = input.is_active;
+    }
+
+    const { error } = await admin
+      .from("profiles")
+      .update(updatePayload)
+      .eq("id", input.user_id);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/enrollments");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+

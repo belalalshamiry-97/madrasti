@@ -31,6 +31,7 @@ import {
   submitAssignmentInDB,
 } from "@/lib/services/assignments-service";
 import { uploadFileAction } from "@/lib/services/storage-service";
+import { downloadFileDirectly } from "@/lib/download-util";
 
 export default function StudentAssignmentDetailsPage() {
   const router = useRouter();
@@ -54,6 +55,20 @@ export default function StudentAssignmentDetailsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownloadAttachment = async (fileUrl: string | undefined, fileName: string, id: string) => {
+    if (!fileUrl) {
+      alert("رابط الملف غير متاح حالياً للتحميل المباشر.");
+      return;
+    }
+    setDownloadingId(id);
+    const res = await downloadFileDirectly(fileUrl, fileName);
+    setDownloadingId(null);
+    if (!res.success && res.error) {
+      alert(res.error);
+    }
+  };
 
   useEffect(() => {
     const active = getActiveUser("STUDENT");
@@ -337,23 +352,22 @@ export default function StudentAssignmentDetailsPage() {
                       </div>
                     </div>
 
-                    <a
-                      href={fileUrl || "#"}
-                      download={att.name || att.file_name || "assignment_file"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => {
-                        if (!fileUrl) {
-                          e.preventDefault();
-                          alert("رابط الملف غير متاح حالياً للتحميل.");
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center gap-1.5 shadow-glow hover:brightness-110 transition-all shrink-0"
-                      title="تحميل ورقة التكليف"
+                    <button
+                      type="button"
+                      disabled={downloadingId === (att.id || idx.toString())}
+                      onClick={() =>
+                        handleDownloadAttachment(
+                          fileUrl,
+                          att.name || att.file_name || "assignment_file.pdf",
+                          att.id || idx.toString()
+                        )
+                      }
+                      className="px-3 py-1.5 rounded-xl bg-brand-cyan text-background font-bold text-xs flex items-center gap-1.5 shadow-glow hover:brightness-110 transition-all shrink-0 disabled:opacity-50"
+                      title="تحميل ورقة التكليف مباشرة إلى جهازك"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      <span>تحميل</span>
-                    </a>
+                      <span>{downloadingId === (att.id || idx.toString()) ? "جاري التنزيل..." : "تحميل"}</span>
+                    </button>
                   </div>
                 );
               })}

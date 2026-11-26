@@ -93,9 +93,10 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickDemo = async (role: "ADMIN" | "TEACHER" | "STUDENT", demoUsername: string) => {
+  const handleQuickDemo = (demoUsername: string, demoPass: string = "") => {
     setUsername(demoUsername);
-    setPassword("123");
+    setPassword(demoPass);
+    setError(null);
   };
 
   return (
@@ -212,33 +213,42 @@ export default function LoginPage() {
 
           {/* Quick Demo Access Bar */}
           <div className="mt-8 pt-6 border-t border-border/80 space-y-3">
-            <div className="p-3 rounded-2xl bg-surface-secondary/70 border border-border text-[11px] text-muted space-y-1">
+            <div className="p-3 rounded-2xl bg-surface-secondary/70 border border-border text-[11px] text-muted space-y-1.5">
               <div className="flex items-center gap-1.5 font-bold text-foreground">
                 <Info className="w-3.5 h-3.5 text-brand-cyan" />
-                <span>حسابات تجريبية سريعة للفحص:</span>
+                <span>حسابات المنصة المسجلة للفحص السريع:</span>
               </div>
-              <p>• المعلم: <strong className="text-brand-teal font-mono">teacher1</strong> (كلمة المرور: 123)</p>
-              <p>• الطالب: <strong className="text-brand-cyan font-mono">student1</strong> (كلمة المرور: 123)</p>
-              <p className="text-[10px] text-brand-cyan font-semibold">🔒 حساب المدير محمي ولا يمكن الدخول عليه إلا بكتابة بياناته يدوياً في النموذج أعلاه.</p>
+              <p>• المدير: <strong className="text-foreground font-mono">admin</strong> (كلمة المرور: <span className="text-brand-cyan font-mono">admin123456</span>)</p>
+              <p>• الطالب: <strong className="text-brand-cyan font-mono">ahmed2026</strong> (كلمة المرور: <span className="text-brand-cyan font-mono">Password123!</span>)</p>
+              <p>• المعلم: <strong className="text-brand-teal font-mono">alala1997</strong> (أدخل كلمة المرور الخاصة بحسابك)</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickDemo("TEACHER", "teacher1")}
-                className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-surface-secondary hover:bg-brand-teal/15 hover:border-brand-teal/40 border border-border text-foreground transition-all"
+                onClick={() => handleQuickDemo("admin", "admin123456")}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-secondary hover:bg-brand-cyan/15 hover:border-brand-cyan/40 border border-border text-foreground transition-all"
               >
-                <BookOpen className="w-4 h-4 text-brand-teal mb-1" />
-                <span className="text-[11px] font-bold">دخول سريع كمعلم</span>
+                <Shield className="w-4 h-4 text-brand-cyan mb-1" />
+                <span className="text-[11px] font-bold">دخول المدير</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleQuickDemo("STUDENT", "student1")}
-                className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-surface-secondary hover:bg-brand-cyan/15 hover:border-brand-cyan/40 border border-border text-foreground transition-all"
+                onClick={() => handleQuickDemo("alala1997", "")}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-secondary hover:bg-brand-teal/15 hover:border-brand-teal/40 border border-border text-foreground transition-all"
+              >
+                <BookOpen className="w-4 h-4 text-brand-teal mb-1" />
+                <span className="text-[11px] font-bold">حساب المعلم</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickDemo("ahmed2026", "Password123!")}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-surface-secondary hover:bg-brand-cyan/15 hover:border-brand-cyan/40 border border-border text-foreground transition-all"
               >
                 <UserCheck className="w-4 h-4 text-brand-cyan mb-1" />
-                <span className="text-[11px] font-bold">دخول سريع كطالب</span>
+                <span className="text-[11px] font-bold">دخول الطالب</span>
               </button>
             </div>
           </div>

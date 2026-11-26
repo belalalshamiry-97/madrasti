@@ -33,6 +33,7 @@ import { PDFViewerModal } from "@/components/lessons/PDFViewerModal";
 import { getActiveUser } from "@/lib/user-store";
 import { getLessonDetailsFromDB } from "@/lib/services/lessons-service";
 import { getCourseDetailsFromDB } from "@/lib/services/academic-service";
+import { downloadFileDirectly } from "@/lib/download-util";
 
 interface LessonQuestion {
   id: string;
@@ -59,6 +60,20 @@ export default function LessonDetailsPage() {
   const [lesson, setLesson] = useState<any>(null);
   const [course, setCourse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [downloadingMatId, setDownloadingMatId] = useState<string | null>(null);
+
+  const handleDownloadMaterial = async (fileUrl: string | undefined, fileName: string, id: string) => {
+    if (!fileUrl) {
+      alert("رابط الملف غير متاح حالياً للتحميل المباشر.");
+      return;
+    }
+    setDownloadingMatId(id);
+    const res = await downloadFileDirectly(fileUrl, fileName);
+    setDownloadingMatId(null);
+    if (!res.success && res.error) {
+      alert(res.error);
+    }
+  };
 
   const params = useParams();
   const courseId = params?.id as string;
@@ -258,23 +273,22 @@ export default function LessonDetailsPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <a
-                              href={materialUrl || "#"}
-                              download={mat.title || "lecture_file.pdf"}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              disabled={downloadingMatId === (mat.id || idx.toString())}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (!materialUrl) {
-                                  e.preventDefault();
-                                  alert("رابط الملف غير متاح حالياً للتحميل المباشر.");
-                                }
+                                handleDownloadMaterial(
+                                  materialUrl,
+                                  mat.title || "lecture_file.pdf",
+                                  mat.id || idx.toString()
+                                );
                               }}
-                              className="p-2 rounded-xl bg-brand-cyan text-background hover:brightness-110 shadow-glow transition-all"
-                              title="تحميل الملف مباشرة"
+                              className="p-2 rounded-xl bg-brand-cyan text-background hover:brightness-110 shadow-glow transition-all disabled:opacity-50"
+                              title="تحميل الملف مباشرة إلى جهازك"
                             >
                               <Download className="w-4 h-4" />
-                            </a>
+                            </button>
                           </div>
                         </div>
                       );

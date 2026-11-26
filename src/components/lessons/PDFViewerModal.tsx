@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { X, Download, FileText, ExternalLink, CheckCircle2 } from "lucide-react";
 
+import { downloadFileDirectly } from "@/lib/download-util";
+
 interface PDFViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -19,32 +21,28 @@ export function PDFViewerModal({
   fileSizeBytes,
 }: PDFViewerModalProps) {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!fileUrl) {
       setActionNotice("عذراً، رابط تحميل الملف غير متاح حالياً في السيرفر.");
       setTimeout(() => setActionNotice(null), 3500);
       return;
     }
 
-    try {
-      const link = document.createElement("a");
-      link.href = fileUrl;
-      link.download = fileName || "lecture_file";
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    setIsDownloading(true);
+    setActionNotice(`جاري تنزيل الملف إلى جهازك: ${fileName}...`);
+    const res = await downloadFileDirectly(fileUrl, fileName);
+    setIsDownloading(false);
 
-      setActionNotice(`تم بدء تنزيل الملف: ${fileName}`);
-    } catch {
-      window.open(fileUrl, "_blank");
-      setActionNotice(`تم فتح وتنزيل الملف: ${fileName}`);
+    if (res.success) {
+      setActionNotice(`تم حفظ الملف بنجاح في مجلد التنزيلات: ${fileName}`);
+    } else {
+      setActionNotice(res.error || "فشل تنزيل الملف.");
     }
-    setTimeout(() => setActionNotice(null), 3000);
+    setTimeout(() => setActionNotice(null), 3500);
   };
 
   const handleOpenExternal = () => {
@@ -78,10 +76,11 @@ export function PDFViewerModal({
           <div className="flex items-center gap-2">
             <button
               onClick={handleDownload}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-cyan text-background text-xs font-bold hover:opacity-90 transition-opacity"
+              disabled={isDownloading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-cyan text-background text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">تحميل الملف</span>
+              <span className="hidden sm:inline">{isDownloading ? "جاري التنزيل..." : "تحميل الملف"}</span>
             </button>
             <button
               onClick={onClose}
@@ -123,10 +122,13 @@ export function PDFViewerModal({
             </button>
             <button
               onClick={handleDownload}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-cyan text-background text-xs font-bold shadow-glow hover:opacity-95 transition-opacity"
+              disabled={isDownloading}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-cyan text-background text-xs font-bold shadow-glow hover:opacity-95 transition-opacity disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
-              تنزيل الملف {fileSizeBytes ? `(${(fileSizeBytes / (1024 * 1024)).toFixed(1)} MB)` : ""}
+              {isDownloading
+                ? "جاري التنزيل..."
+                : `تنزيل الملف ${fileSizeBytes ? `(${(fileSizeBytes / (1024 * 1024)).toFixed(1)} MB)` : ""}`}
             </button>
           </div>
         </div>

@@ -23,27 +23,45 @@ export async function loginWithSupabase(loginIdentifier: string, password: strin
     }
 
     const supabase = await createClient();
+    const admin = createAdminClient();
 
-    // 1. Resolve email
+    // 1. Resolve email from username or email input
     let email = rawInput;
+    let targetProfile = null;
+
     if (!rawInput.includes("@")) {
-      // Check if username exists in profiles to get user
-      const admin = createAdminClient();
+      // Find profile by username (case-insensitive)
       const { data: profileByUsername } = await admin
         .from("profiles")
-        .select("id, username")
-        .eq("username", rawInput)
+        .select("*")
+        .ilike("username", rawInput)
         .maybeSingle();
 
-      if (profileByUsername) {
-        const { data: authUser } = await admin.auth.admin.getUserById(profileByUsername.id);
-        if (authUser?.user?.email) {
-          email = authUser.user.email;
-        } else {
-          email = `${rawInput}@madrasti.school`;
-        }
+      if (!profileByUsername) {
+        return {
+          success: false,
+          error: `اسم المستخدم "${rawInput}" غير مسجل في النظام. يرجى التأكد من كتابة اسم المستخدم الصحيح.`,
+        };
+      }
+
+      targetProfile = profileByUsername;
+      const { data: authUser } = await admin.auth.admin.getUserById(profileByUsername.id);
+      if (authUser?.user?.email) {
+        email = authUser.user.email;
       } else {
         email = `${rawInput}@madrasti.school`;
+      }
+    } else {
+      // Verify email existence in auth.users
+      const { data: usersList } = await admin.auth.admin.listUsers();
+      const matched = usersList?.users?.find(
+        (u) => u.email?.toLowerCase() === rawInput.toLowerCase()
+      );
+      if (!matched) {
+        return {
+          success: false,
+          error: `البريد الإلكتروني "${rawInput}" غير مسجل في المنصة.`,
+        };
       }
     }
 
@@ -54,17 +72,17 @@ export async function loginWithSupabase(loginIdentifier: string, password: strin
     });
 
     if (authError || !authData.user) {
-      console.warn("Supabase Auth login failed for:", email, authError?.message);
+      console.warn("Supabase Auth login password failed for:", email, authError?.message);
       return {
         success: false,
-        error: "بيانات الدخول غير صحيحة. يرجى التأكد من اسم المستخدم وكلمة المرور.",
+        error: "كلمة المرور غير صحيحة. يرجى التأكد من إدخال كلمة المرور الصحيحة.",
       };
     }
 
     const authUserId = authData.user.id;
 
-    // 3. Fetch user profile from public.profiles
-    const { data: profile, error: profileError } = await supabase
+    // 3. Fetch user profile from public.profiles using admin client (bypasses RLS)
+    const { data: profile, error: profileError } = await admin
       .from("profiles")
       .select("*")
       .eq("id", authUserId)
@@ -75,7 +93,7 @@ export async function loginWithSupabase(loginIdentifier: string, password: strin
       await supabase.auth.signOut();
       return {
         success: false,
-        error: "لم يتم العثور على الملف الشخصي المقترن بهذا الحساب في المنصة.",
+        error: "تم التحقق من بيانات الدخول ولكن لم يتم العثور على الملف الشخصي المقترن بالحساب. يرجى التواصل مع إدارة المدرسة.",
       };
     }
 
@@ -131,7 +149,8 @@ export async function getCurrentUserProfile(): Promise<Profile | null> {
 
     if (!authData?.user) return null;
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+    const { data: profile } = await admin
       .from("profiles")
       .select("*")
       .eq("id", authData.user.id)

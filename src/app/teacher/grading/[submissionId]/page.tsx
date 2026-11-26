@@ -30,6 +30,7 @@ import {
   AssignmentSubmission,
 } from "@/lib/submission-store";
 import { gradeSubmissionInDB, getTeacherSubmissionsFromDB } from "@/lib/services/assignments-service";
+import { downloadFileDirectly } from "@/lib/download-util";
 
 export default function SubmissionGradingPage() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export default function SubmissionGradingPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // File Preview Modal
-  const [previewFileName, setPreviewFileName] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<{ name: string; url?: string; size?: number } | null>(null);
 
   useEffect(() => {
     const active = getActiveUser("TEACHER");
@@ -287,14 +288,24 @@ export default function SubmissionGradingPage() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setPreviewFileName(file.name)}
-                    className="p-2 rounded-xl bg-brand-cyan/15 hover:bg-brand-cyan/25 text-brand-cyan transition-colors"
-                    title="معاينة الملف"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewFile(file)}
+                      className="p-2 rounded-xl bg-brand-cyan/15 hover:bg-brand-cyan/25 text-brand-cyan transition-colors"
+                      title="معاينة الملف"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadFileDirectly(file.url, file.name)}
+                      className="p-2 rounded-xl bg-surface hover:bg-surface-secondary text-foreground border border-border transition-colors"
+                      title="تنزيل الملف مباشرة"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -364,10 +375,11 @@ export default function SubmissionGradingPage() {
       </main>
 
       <PDFViewerModal
-        isOpen={Boolean(previewFileName)}
-        onClose={() => setPreviewFileName(null)}
-        fileName={previewFileName || "student_solution.pdf"}
-        fileSizeBytes={1540000}
+        isOpen={Boolean(previewFile)}
+        onClose={() => setPreviewFile(null)}
+        fileName={previewFile?.name || "student_solution.pdf"}
+        fileUrl={previewFile?.url}
+        fileSizeBytes={previewFile?.size || null}
       />
 
       <BottomNavigation user={teacher} />

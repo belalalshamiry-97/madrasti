@@ -29,39 +29,42 @@ export async function loginWithSupabase(loginIdentifier: string, password: strin
     let email = rawInput;
     let targetProfile = null;
 
-    if (!rawInput.includes("@")) {
-      // Find profile by username (case-insensitive)
-      const { data: profileByUsername } = await admin
+    const isSchoolDomain = rawInput.endsWith("@madrasti.school");
+    const possibleUsername = isSchoolDomain ? rawInput.replace(/@madrasti\.school$/i, "") : rawInput;
+
+    if (!rawInput.includes("@") || isSchoolDomain) {
+      // 1. Try exact username match in public.profiles
+      let { data: profile } = await admin
         .from("profiles")
         .select("*")
-        .ilike("username", rawInput)
+        .eq("username", possibleUsername)
         .maybeSingle();
 
-      if (!profileByUsername) {
-        return {
-          success: false,
-          error: `اسم المستخدم "${rawInput}" غير مسجل في النظام. يرجى التأكد من كتابة اسم المستخدم الصحيح.`,
-        };
+      // 2. Fallback to case-insensitive ilike match
+      if (!profile) {
+        const { data: ilikeProfile } = await admin
+          .from("profiles")
+          .select("*")
+          .ilike("username", possibleUsername)
+          .maybeSingle();
+        profile = ilikeProfile;
       }
 
-      targetProfile = profileByUsername;
-      const { data: authUser } = await admin.auth.admin.getUserById(profileByUsername.id);
-      if (authUser?.user?.email) {
-        email = authUser.user.email;
+      if (profile) {
+        targetProfile = profile;
+        const { data: authUser } = await admin.auth.admin.getUserById(profile.id);
+        if (authUser?.user?.email) {
+          email = authUser.user.email;
+        } else {
+          email = `${profile.username}@madrasti.school`;
+        }
       } else {
-        email = `${rawInput}@madrasti.school`;
-      }
-    } else {
-      // Verify email existence in auth.users
-      const { data: usersList } = await admin.auth.admin.listUsers();
-      const matched = usersList?.users?.find(
-        (u) => u.email?.toLowerCase() === rawInput.toLowerCase()
-      );
-      if (!matched) {
-        return {
-          success: false,
-          error: `البريد الإلكتروني "${rawInput}" غير مسجل في المنصة.`,
-        };
+        if (!rawInput.includes("@")) {
+          return {
+            success: false,
+            error: `اسم المستخدم "${rawInput}" غير مسجل في النظام. يرجى التأكد من كتابة اسم المستخدم الصحيح.`,
+          };
+        }
       }
     }
 

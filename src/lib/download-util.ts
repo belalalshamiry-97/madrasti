@@ -1,23 +1,54 @@
 "use client";
 
 /**
+ * Resolves relative storage file paths or public URLs to valid, full Supabase storage URLs.
+ */
+export function resolveStorageUrl(
+  pathOrUrl: string | undefined | null,
+  defaultBucket: "course-materials" | "assignments" = "course-materials"
+): string {
+  if (!pathOrUrl) return "";
+  const trimmed = pathOrUrl.trim();
+  if (!trimmed) return "";
+
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("//")) {
+    return trimmed;
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://wnjqtnkpachjqoonangh.supabase.co";
+  const cleanPath = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
+
+  if (cleanPath.startsWith("assignments/")) {
+    return `${baseUrl}/storage/v1/object/public/assignments/${cleanPath}`;
+  }
+  if (cleanPath.startsWith("materials/")) {
+    return `${baseUrl}/storage/v1/object/public/course-materials/${cleanPath}`;
+  }
+
+  return `${baseUrl}/storage/v1/object/public/${defaultBucket}/${cleanPath}`;
+}
+
+/**
  * Downloads a file directly to the user's device (Downloads folder)
  * using a fetched Blob, preventing the browser from opening a black/blank viewer tab.
  * 
- * Works for both cross-origin Supabase Storage URLs and direct links.
+ * Works for both cross-origin Supabase Storage URLs and relative file paths.
  */
 export async function downloadFileDirectly(
   fileUrl: string | undefined | null,
-  suggestedFileName: string = "download"
+  suggestedFileName: string = "download",
+  defaultBucket: "course-materials" | "assignments" = "course-materials"
 ): Promise<{ success: boolean; error?: string }> {
-  if (!fileUrl) {
+  const targetUrl = resolveStorageUrl(fileUrl, defaultBucket);
+
+  if (!targetUrl) {
     return { success: false, error: "رابط الملف غير متوفر للتحميل." };
   }
 
   // Ensure filename has proper extension if available in URL
   let cleanName = suggestedFileName.trim();
-  if (!cleanName.includes(".") && fileUrl.includes(".")) {
-    const urlParts = fileUrl.split("?")[0].split(".");
+  if (!cleanName.includes(".") && targetUrl.includes(".")) {
+    const urlParts = targetUrl.split("?")[0].split(".");
     const ext = urlParts[urlParts.length - 1];
     if (ext && ext.length <= 5 && !ext.includes("/")) {
       cleanName = `${cleanName}.${ext}`;
@@ -26,7 +57,7 @@ export async function downloadFileDirectly(
 
   try {
     // 1. Fetch file as Blob directly
-    const response = await fetch(fileUrl, {
+    const response = await fetch(targetUrl, {
       method: "GET",
       cache: "no-store",
     });
@@ -48,7 +79,9 @@ export async function downloadFileDirectly(
 
     // Cleanup resources
     setTimeout(() => {
-      document.body.removeChild(link);
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
       window.URL.revokeObjectURL(objectUrl);
     }, 1500);
 
@@ -59,7 +92,7 @@ export async function downloadFileDirectly(
     try {
       // 2. Fallback: use Supabase ?download query parameter which returns
       // Content-Disposition: attachment header to force native browser download
-      let downloadUrl = fileUrl;
+      let downloadUrl = targetUrl;
       const downloadParam = `download=${encodeURIComponent(cleanName)}`;
       if (downloadUrl.includes("?")) {
         downloadUrl = `${downloadUrl}&${downloadParam}`;
@@ -76,7 +109,9 @@ export async function downloadFileDirectly(
       fallbackLink.click();
 
       setTimeout(() => {
-        document.body.removeChild(fallbackLink);
+        if (document.body.contains(fallbackLink)) {
+          document.body.removeChild(fallbackLink);
+        }
       }, 1500);
 
       return { success: true };

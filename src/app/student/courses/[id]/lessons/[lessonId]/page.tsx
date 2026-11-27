@@ -33,7 +33,7 @@ import { PDFViewerModal } from "@/components/lessons/PDFViewerModal";
 import { getActiveUser } from "@/lib/user-store";
 import { getLessonDetailsFromDB } from "@/lib/services/lessons-service";
 import { getCourseDetailsFromDB } from "@/lib/services/academic-service";
-import { downloadFileDirectly } from "@/lib/download-util";
+import { downloadFileDirectly, resolveStorageUrl } from "@/lib/download-util";
 
 interface LessonQuestion {
   id: string;
@@ -63,12 +63,13 @@ export default function LessonDetailsPage() {
   const [downloadingMatId, setDownloadingMatId] = useState<string | null>(null);
 
   const handleDownloadMaterial = async (fileUrl: string | undefined, fileName: string, id: string) => {
-    if (!fileUrl) {
+    const targetUrl = resolveStorageUrl(fileUrl, "course-materials");
+    if (!targetUrl) {
       alert("رابط الملف غير متاح حالياً للتحميل المباشر.");
       return;
     }
     setDownloadingMatId(id);
-    const res = await downloadFileDirectly(fileUrl, fileName);
+    const res = await downloadFileDirectly(targetUrl, fileName, "course-materials");
     setDownloadingMatId(null);
     if (!res.success && res.error) {
       alert(res.error);
@@ -224,7 +225,7 @@ export default function LessonDetailsPage() {
                     const isVideo = mat.material_type === "video_link" || mat.external_url;
 
                     if (isPdf) {
-                      const materialUrl = mat.file_url || (mat.file_path?.startsWith("http") ? mat.file_path : undefined);
+                      const materialUrl = resolveStorageUrl(mat.file_url || mat.file_path, "course-materials");
 
                       return (
                         <div

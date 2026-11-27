@@ -47,6 +47,7 @@ import {
   AcademicSectionData,
 } from "@/lib/services/academic-service";
 import { cn } from "@/lib/utils";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
 // Available granular permissions in the school LMS
 const SYSTEM_PERMISSIONS = [
@@ -84,28 +85,33 @@ export default function AdminUsersPermissionsPage() {
         getEnrolledStudentsFromDB(),
       ]);
 
-      setGradesList(dbGrades);
-      setSectionsList(dbSections);
+      const safeGrades = dbGrades || [];
+      const safeSections = dbSections || [];
+      const safeEnrolled = dbEnrolled || [];
+      const safeProfiles = dbProfiles || [];
+
+      setGradesList(safeGrades);
+      setSectionsList(safeSections);
 
       const enrolledMap: Record<string, EnrolledStudentData> = {};
-      dbEnrolled.forEach((s) => {
-        enrolledMap[s.id] = s;
+      safeEnrolled.forEach((s) => {
+        if (s && s.id) enrolledMap[s.id] = s;
       });
       setEnrolledStudentsMap(enrolledMap);
 
-      if (dbGrades.length > 0) {
-        setNewGradeId(dbGrades[0].id);
-        const matchSec = dbSections.filter((s) => s.grade_level_id === dbGrades[0].id);
-        if (matchSec.length > 0) setNewSectionId(matchSec[0].id);
+      if (safeGrades.length > 0) {
+        setNewGradeId((prev) => prev || safeGrades[0].id);
+        const matchSec = safeSections.filter((s) => s && s.grade_level_id === safeGrades[0].id);
+        if (matchSec.length > 0) setNewSectionId((prev) => prev || matchSec[0].id);
       }
 
-      const mapped: AppUser[] = dbProfiles.map((p) => {
+      const mapped: AppUser[] = safeProfiles.map((p) => {
         const studentInfo = enrolledMap[p.id];
         return {
           id: p.id,
-          full_name: p.full_name,
-          username: p.username,
-          role: p.role,
+          full_name: p.full_name || p.username || "مستخدم",
+          username: p.username || "user",
+          role: p.role || "STUDENT",
           phone: p.phone || "",
           password: "",
           grade: studentInfo?.grade_name,
@@ -324,7 +330,7 @@ export default function AdminUsersPermissionsPage() {
     const cleanUsername = newUsername.trim().toLowerCase();
 
     // Check if username already exists
-    if (usersList.some((u) => u.username.toLowerCase() === cleanUsername)) {
+    if (usersList.some((u) => (u.username || "").toLowerCase() === cleanUsername)) {
       setModalError("اسم المستخدم هذا مسجل مسبقاً، يرجى اختيار اسم مستخدم آخر.");
       return;
     }
@@ -356,7 +362,7 @@ export default function AdminUsersPermissionsPage() {
       setNewPassword("");
       setNewPhone("");
       setNewSelectedPermissions(["view_attendance", "manage_grades"]);
-      showToast(`✅ تم إنشاء المستخدم "${result.user?.full_name}" بنجاح وحفظه في Supabase!`);
+      showToast(`✅ تم إنشاء المستخدم "${result.user?.full_name || cleanUsername}" بنجاح وحفظه في Supabase!`);
     } catch (err: any) {
       setModalError(err.message || "حدث خطأ غير متوقع أثناء حفظ المستخدم.");
     } finally {
@@ -364,10 +370,14 @@ export default function AdminUsersPermissionsPage() {
     }
   };
 
-  const filteredUsers = usersList.filter((u) => {
+  const filteredUsers = (usersList || []).filter((u) => {
+    if (!u) return false;
+    const fullName = (u.full_name || u.username || "").toLowerCase();
+    const username = (u.username || "").toLowerCase();
+    const query = (searchQuery || "").toLowerCase();
     const matchesSearch =
-      u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.username.toLowerCase().includes(searchQuery.toLowerCase());
+      fullName.includes(query) ||
+      username.includes(query);
     const matchesRole = roleFilter === "ALL" || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -480,16 +490,25 @@ export default function AdminUsersPermissionsPage() {
         </div>
 
         {/* Users List Card */}
-        <div className="p-4 sm:p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
-          <div className="hidden sm:grid sm:grid-cols-12 text-xs font-bold text-muted pb-3 border-b border-border">
-            <span className="col-span-4">المستخدم والحساب</span>
-            <span className="col-span-2 text-center">الدور وكلمة المرور</span>
-            <span className="col-span-3 text-center">الصلاحيات المحددة</span>
-            <span className="col-span-3 text-left">إجراءات الإدارة</span>
-          </div>
+        <ErrorBoundary
+          fallbackTitle="حدث خطأ غير متوقع أثناء عرض جدول المستخدمين"
+          onReset={loadUsers}
+        >
+          <div className="p-4 sm:p-6 rounded-3xl bg-surface border border-border shadow-card space-y-4">
+            <div className="hidden sm:grid sm:grid-cols-12 text-xs font-bold text-muted pb-3 border-b border-border">
+              <span className="col-span-4">المستخدم والحساب</span>
+              <span className="col-span-2 text-center">الدور وكلمة المرور</span>
+              <span className="col-span-3 text-center">الصلاحيات المحددة</span>
+              <span className="col-span-3 text-left">إجراءات الإدارة</span>
+            </div>
 
-          <div className="space-y-3">
-            {filteredUsers.map((userItem) => (
+            <div className="space-y-3">
+              {filteredUsers.length === 0 ? (
+                <div className="p-8 text-center text-xs text-muted">
+                  لا يوجد مستخدمون مطابقون لمعايير البحث الحالية.
+                </div>
+              ) : (
+                filteredUsers.map((userItem) => (
               <div
                 key={userItem.id}
                 className="p-4 rounded-2xl bg-surface-secondary/50 border border-border flex flex-col sm:grid sm:grid-cols-12 sm:items-center gap-3 transition-colors hover:border-brand-cyan/30"
@@ -509,12 +528,12 @@ export default function AdminUsersPermissionsPage() {
                     {userItem.role === "ADMIN" ? (
                       <Shield className="w-5 h-5" />
                     ) : (
-                      userItem.full_name.slice(0, 1)
+                      ((userItem.full_name || userItem.username || "م").slice(0, 1))
                     )}
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      {userItem.full_name}
+                      {userItem.full_name || userItem.username || "بدون اسم"}
                       {userItem.role === "ADMIN" && (
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-status-warning/20 text-status-warning font-black">
                           مدير
@@ -605,9 +624,11 @@ export default function AdminUsersPermissionsPage() {
                   )}
                 </div>
               </div>
-            ))}
+              ))
+              )}
+            </div>
           </div>
-        </div>
+        </ErrorBoundary>
 
         <DeveloperFooter />
       </main>
@@ -635,7 +656,7 @@ export default function AdminUsersPermissionsPage() {
               <div className="p-3 rounded-xl bg-surface-secondary border border-border">
                 <span className="text-muted block">المستخدم:</span>
                 <span className="font-bold text-foreground text-sm">
-                  {resetPasswordUser.full_name} (@{resetPasswordUser.username})
+                  {resetPasswordUser.full_name || resetPasswordUser.username} (@{resetPasswordUser.username})
                 </span>
               </div>
 
@@ -697,7 +718,7 @@ export default function AdminUsersPermissionsPage() {
               <div className="p-3 rounded-xl bg-surface-secondary border border-border">
                 <span className="text-muted block">المستخدم:</span>
                 <span className="font-bold text-foreground text-sm">
-                  {editingPermissionsUser.full_name} (@{editingPermissionsUser.username})
+                  {editingPermissionsUser.full_name || editingPermissionsUser.username} (@{editingPermissionsUser.username})
                 </span>
               </div>
 
@@ -884,13 +905,13 @@ export default function AdminUsersPermissionsPage() {
                       onChange={(e) => {
                         const gId = e.target.value;
                         setNewGradeId(gId);
-                        const matchSecs = sectionsList.filter((s) => s.grade_level_id === gId);
+                        const matchSecs = (sectionsList || []).filter((s) => s && s.grade_level_id === gId);
                         if (matchSecs.length > 0) setNewSectionId(matchSecs[0].id);
                         else setNewSectionId("");
                       }}
                       className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                     >
-                      {gradesList.map((g) => (
+                      {(gradesList || []).map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.name}
                         </option>
@@ -908,8 +929,8 @@ export default function AdminUsersPermissionsPage() {
                       onChange={(e) => setNewSectionId(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-cyan"
                     >
-                      {sectionsList
-                        .filter((s) => !newGradeId || s.grade_level_id === newGradeId)
+                      {(sectionsList || [])
+                        .filter((s) => s && (!newGradeId || s.grade_level_id === newGradeId))
                         .map((sec) => (
                           <option key={sec.id} value={sec.id}>
                             شعبة {sec.name} {sec.track_name ? `(${sec.track_name})` : ""}
@@ -1052,7 +1073,7 @@ export default function AdminUsersPermissionsPage() {
                       onChange={(e) => handleEditGradeChange(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-teal"
                     >
-                      {gradesList.map((g) => (
+                      {(gradesList || []).map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.name}
                         </option>
@@ -1070,8 +1091,8 @@ export default function AdminUsersPermissionsPage() {
                       onChange={(e) => setEditSectionId(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl bg-surface-secondary border border-border text-foreground font-bold focus:outline-none focus:border-brand-teal"
                     >
-                      {sectionsList
-                        .filter((s) => !editGradeId || s.grade_level_id === editGradeId)
+                      {(sectionsList || [])
+                        .filter((s) => s && (!editGradeId || s.grade_level_id === editGradeId))
                         .map((sec) => (
                           <option key={sec.id} value={sec.id}>
                             شعبة {sec.name} {sec.track_name ? `(${sec.track_name})` : ""}

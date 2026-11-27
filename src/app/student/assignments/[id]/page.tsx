@@ -31,7 +31,7 @@ import {
   submitAssignmentInDB,
 } from "@/lib/services/assignments-service";
 import { uploadFileAction } from "@/lib/services/storage-service";
-import { downloadFileDirectly } from "@/lib/download-util";
+import { downloadFileDirectly, resolveStorageUrl } from "@/lib/download-util";
 
 export default function StudentAssignmentDetailsPage() {
   const router = useRouter();
@@ -58,12 +58,13 @@ export default function StudentAssignmentDetailsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const handleDownloadAttachment = async (fileUrl: string | undefined, fileName: string, id: string) => {
-    if (!fileUrl) {
+    const targetUrl = resolveStorageUrl(fileUrl, "assignments");
+    if (!targetUrl) {
       alert("رابط الملف غير متاح حالياً للتحميل المباشر.");
       return;
     }
     setDownloadingId(id);
-    const res = await downloadFileDirectly(fileUrl, fileName);
+    const res = await downloadFileDirectly(targetUrl, fileName, "assignments");
     setDownloadingId(null);
     if (!res.success && res.error) {
       alert(res.error);
@@ -330,7 +331,7 @@ export default function StudentAssignmentDetailsPage() {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {assignment.attachments.map((att: any, idx: number) => {
-                const fileUrl = att.file_url || (att.file_path?.startsWith("http") ? att.file_path : undefined);
+                const fileUrl = resolveStorageUrl(att.file_url || att.file_path, "assignments");
                 return (
                   <div
                     key={att.id || idx}
